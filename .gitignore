@@ -1,0 +1,17 @@
+# wmake build output
+Make/*/
+lnInclude/
+
+# Tutorial run output (fields are restored from 0.orig by Allrun)
+tutorials/*/0/
+tutorials/*/[1-9]*/
+tutorials/*/0.[0-9]*/
+tutorials/*/constant/polyMesh/
+tutorials/*/processor*/
+tutorials/*/postProcessing/
+tutorials/*/log.*
+tutorials/*/*.msh
+
+# Python
+__pycache__/
+*.pyc

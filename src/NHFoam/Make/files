@@ -1,0 +1,5 @@
+sigmaColumns/sigmaColumns.C
+linearWave/linearWave.C
+forcingZones/forcingZones.C
+
+LIB = $(FOAM_USER_LIBBIN)/libNHFoam

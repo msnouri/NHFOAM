@@ -1,0 +1,36 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFoam
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      decomposeParDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+numberOfSubdomains  2;
+
+// Whole water columns must stay on one processor: decompose the bottom
+// patch in 2D and carry the decomposition up through the layers
+method          structured;
+
+structuredCoeffs
+{
+    method      simple;        // or scotch, if available
+    patches     (bottom);
+
+    simpleCoeffs
+    {
+        n       (2 1 1);
+        delta   0.001;
+    }
+}
+
+// ************************************************************************* //

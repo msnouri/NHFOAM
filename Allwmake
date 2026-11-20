@@ -1,0 +1,18 @@
+#!/bin/sh
+cd "${0%/*}" || exit 1
+# Build NHFoam: support library, solver and initial-condition utility
+# (source your OpenFOAM environment first, e.g. ESI OpenFOAM v2512)
+
+if [ -z "$WM_PROJECT_DIR" ]
+then
+    echo "Error: source the OpenFOAM environment (etc/bashrc) first" 1>&2
+    exit 1
+fi
+
+set -e
+wmake libso src/NHFoam
+wmake applications/solvers/NHFoam
+wmake applications/utilities/nhSetWaves
+
+echo
+echo "NHFoam built: $FOAM_USER_APPBIN/NHFoam, $FOAM_USER_APPBIN/nhSetWaves"

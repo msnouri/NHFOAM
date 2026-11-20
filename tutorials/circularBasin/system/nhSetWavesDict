@@ -1,0 +1,27 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFoam
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      nhSetWavesDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// First asymmetric sloshing mode of a circular basin of radius R = 1 m:
+//     eta = a J1(k r) cos(theta),  k R = 1.841183781 (first root of J1')
+// Linear theory: omega^2 = g k tanh(k h)  ->  T = 1.734904 s for h = 0.5 m
+type            circularMode;
+amplitude       0.005;
+waveNumber      1.841183781;
+mode            1;
+centre          (0 0 0);
+
+// ************************************************************************* //
