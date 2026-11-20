@@ -43,9 +43,11 @@ Description
         pressure solve therefore yields q and eta^{n+1} together.  No
         gravity-wave Courant limit; Euler or backward (BDF2) in time,
         following ddt(U).
+      - Prescribed bottom motion (seabed uplift, solid slides).
+      - Wave breaking with the hydrostatic front approximation (HFA).
       - Sponge and wave-making relaxation zones, wave gauges.
 
-    Not (yet) included: wetting and drying, wave breaking models.
+    Not (yet) included: wetting and drying.
 
 \*---------------------------------------------------------------------------*/
 
@@ -55,9 +57,11 @@ Description
 #include "pimpleControl.H"
 #include "fvOptions.H"
 #include "mixedFvPatchFields.H"
+#include "zeroGradientFvPatchFields.H"
 #include "OFstream.H"
 #include "sigmaColumns.H"
 #include "forcingZones.H"
+#include "bottomMotion.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

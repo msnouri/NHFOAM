@@ -30,6 +30,7 @@ Foam::forcingZone::forcingZone
 :
     name_(name),
     isWave_(false),
+    relaxEta_(dict.getOrDefault<bool>("relaxEta", true)),
     start_(dict.get<point>("start")),
     dir_(Zero),
     length_(0),
@@ -69,7 +70,12 @@ Foam::forcingZone::forcingZone
     dir_ /= length_;
 
     Info<< "    forcing zone " << name_ << " (" << type << "): from "
-        << start_ << " to " << end << ", sigmaMax " << sigmaMax_ << endl;
+        << start_ << " to " << end << ", sigmaMax " << sigmaMax_;
+    if (!relaxEta_)
+    {
+        Info<< ", velocity only";
+    }
+    Info<< endl;
 }
 
 
@@ -203,6 +209,11 @@ void Foam::forcingZones::columnTargets
     forAll(zones_, zonei)
     {
         const forcingZone& zone = zones_[zonei];
+
+        if (!zone.relaxEta())
+        {
+            continue;
+        }
 
         forAll(colCentre, coli)
         {

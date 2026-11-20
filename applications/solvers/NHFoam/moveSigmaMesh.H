@@ -12,6 +12,8 @@
         )
     );
 
+    columns.updateGeometry();
+
     phi = mesh.Sf() & Uf;
     fvc::makeRelative(phi, U);
 }

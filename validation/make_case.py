@@ -29,9 +29,10 @@ def write(case, rel, cls, body):
     with open(path, "w") as f:
         f.write(HDR.format(cls=cls, loc=loc, obj=obj) + textwrap.dedent(body).strip() + "\n" + FTR)
 
-def common_fields(case, walls=("left", "right"), extra_U=None, extra_p=None):
+def common_fields(case, walls=("left", "right"), extra_U=None, extra_p=None, empty=True):
     wallU = "".join(f"    {w}\n    {{\n        type            slip;\n    }}\n" for w in walls)
     wallP = "".join(f"    {w}\n    {{\n        type            fixedFluxPressure;\n        value           uniform 0;\n    }}\n" for w in walls)
+    fbE = "    frontAndBack\n    {\n        type            empty;\n    }\n" if empty else ""
     wallE = "".join(f"    {w}\n    {{\n        type            zeroGradient;\n    }}\n" for w in walls)
     write(case, "0/U", "volVectorField", f"""
 dimensions      [0 1 -1 0 0 0 0];
@@ -48,11 +49,7 @@ boundaryField
     {{
         type            slip;
     }}
-{wallU}    frontAndBack
-    {{
-        type            empty;
-    }}
-}}
+{wallU}{fbE}}}
 """)
     write(case, "0/p_rgh", "volScalarField", f"""
 dimensions      [0 2 -2 0 0 0 0];
@@ -75,11 +72,7 @@ boundaryField
         type            fixedFluxPressure;
         value           uniform 0;
     }}
-{wallP}    frontAndBack
-    {{
-        type            empty;
-    }}
-}}
+{wallP}{fbE}}}
 """)
     write(case, "0/eta", "volScalarField", f"""
 dimensions      [0 1 0 0 0 0 0];
@@ -96,11 +89,7 @@ boundaryField
     {{
         type            zeroGradient;
     }}
-{wallE}    frontAndBack
-    {{
-        type            empty;
-    }}
-}}
+{wallE}{fbE}}}
 """)
 
 def constant_files(case, nu=1e-6, nh_extra=""):
@@ -128,9 +117,17 @@ stillWaterLevel 0;
 {nh_extra}
 """)
 
-def system_files(case, endTime, deltaT, writeInterval, ddt="backward 1", nCorr=3, nNonOrth=0, pTol=1e-12, extraSolver=""):
+# Convection of momentum. Central differencing keeps progressive waves from
+# decaying (linearUpwind loses ~12% of H = 4 cm over 8 wavelengths); bores
+# need a TVD scheme, so breaking cases use limitedLinearV (~3% loss).
+CONV = "Gauss linear"
+CONV_BREAKING = "Gauss limitedLinearV 1"
+
+
+def system_files(case, endTime, deltaT, writeInterval, ddt="backward 1", nCorr=3, nNonOrth=0, pTol=1e-12, extraSolver="", libs=False, conv=None):
+    libsLine = 'libs            ("libNHFoam.so");   // nhMovingSlipVelocity for utilities\n\n' if libs else ""
     write(case, "system/controlDict", "dictionary", f"""
-application     NHFoam;
+{libsLine}application     NHFoam;
 
 startFrom       startTime;
 startTime       0;
@@ -168,7 +165,7 @@ gradSchemes
 divSchemes
 {{
     default         none;
-    div(phi,U)      Gauss linearUpwind grad(U);
+    div(phi,U)      {conv or CONV};
     div((nuEff*dev2(T(grad(U))))) Gauss linear;
 }}
 
@@ -283,8 +280,10 @@ boundary
 );
 """)
 
-def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0):
-    """Piecewise-linear bottom: depth hs[i] at xs[i], one block per segment."""
+def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0, Ny=1, ygrade=1.0):
+    """Piecewise-linear bottom: depth hs[i] at xs[i], one block per segment.
+    Ny = 1: 2D (empty frontAndBack, width dy). Ny > 1: 3D channel of width
+    dy with walls 'axis' (y = 0) and 'side' (y = dy)."""
     verts = []
     for i, (x, h) in enumerate(zip(xs, hs)):
         verts += [f"({x:.10g} 0 {-h:.10g})", f"({x:.10g} {dy} {-h:.10g})",
@@ -294,17 +293,34 @@ def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0):
         a = 4 * i; b = 4 * (i + 1)
         # hex: bottom (a0, b0, b1, a1), top (a2, b2, b3, a3)
         nx = max(1, int(round((xs[i + 1] - xs[i]) / dx)))
-        blocks.append(f"hex ({a} {b} {b+1} {a+1} {a+2} {b+2} {b+3} {a+3}) ({nx} 1 {Nz}) simpleGrading (1 1 {zgrade})")
+        blocks.append(f"hex ({a} {b} {b+1} {a+1} {a+2} {b+2} {b+3} {a+3}) ({nx} {Ny} {Nz}) simpleGrading (1 {ygrade:g} {zgrade})")
         surf.append(f"({a+2} {b+2} {b+3} {a+3})")
         bot.append(f"({a} {a+1} {b+1} {b})")
     n = len(xs) - 1
     left = "(0 2 3 1)"
     right = f"({4*n} {4*n+1} {4*n+3} {4*n+2})"
-    fb = []
+    front, back = [], []
     for i in range(n):
         a = 4 * i; b = 4 * (i + 1)
-        fb.append(f"({a} {b} {b+2} {a+2})")
-        fb.append(f"({a+1} {a+3} {b+3} {b+1})")
+        front.append(f"({a} {b} {b+2} {a+2})")
+        back.append(f"({a+1} {a+3} {b+3} {b+1})")
+    if Ny == 1:
+        sides = f"""    frontAndBack
+    {{
+        type empty;
+        faces ({' '.join(front + back)});
+    }}"""
+    else:
+        sides = f"""    axis
+    {{
+        type wall;
+        faces ({' '.join(front)});
+    }}
+    side
+    {{
+        type wall;
+        faces ({' '.join(back)});
+    }}"""
     nl = "\n    "
     write(case, "system/blockMeshDict", "dictionary", f"""
 scale   1;
@@ -341,11 +357,7 @@ boundary
         type wall;
         faces ({right});
     }}
-    frontAndBack
-    {{
-        type empty;
-        faces ({' '.join(fb)});
-    }}
+{sides}
 );
 """)
 
@@ -399,7 +411,8 @@ if __name__ == "__main__":
 
 
 def bar_case(case, nLayers=10, dx=0.02, dt=0.01, endTime=50.0, H=0.02, T=2.02,
-             waves=True, sigmaMax=20.0, writeEvery=None):
+             waves=True, sigmaMax=20.0, writeEvery=None, breaking=None, conv=None,
+             zgrade=1.0):
     """Luth et al. (1994) / Beji & Battjes (1993) submerged bar, case A
     (flume coordinates of the FUNWAVE benchmark: bar from x = 26 to 37 m)."""
     xs = [0, 26, 32, 34, 37, 54]
@@ -435,16 +448,27 @@ forcingZones
     }}
 }}
 """
+    brk = ""
+    if breaking:
+        brk = f"""
+breaking
+{{
+    model       HFA;
+    alpha       {breaking.get('alpha', 0.6):g};
+    beta        {breaking.get('beta', 0.3):g};
+}}
+"""
     constant_files(case, nh_extra=f"""
 gauges
 {{
 {gtxt}
 }}
-{zones}""")
+{zones}{brk}""")
     nsteps = int(round(endTime / dt))
     system_files(case, endTime=endTime, deltaT=dt,
-                 writeInterval=writeEvery or nsteps, nCorr=3, nNonOrth=1, pTol=1e-10)
-    blockmesh_profile(case, xs, hs, dy, dx, nLayers)
+                 writeInterval=writeEvery or nsteps, nCorr=3, nNonOrth=1, pTol=1e-10,
+                 conv=conv or (CONV_BREAKING if breaking else CONV))
+    blockmesh_profile(case, xs, hs, dy, dx, nLayers, zgrade=zgrade)
     common_fields(case)
     allrun(case, """
     runApplication blockMesh
@@ -478,5 +502,321 @@ direction       (1 0 0);
     allrun(case, """
     runApplication blockMesh
     runApplication nhSetWaves
+    runApplication NHFoam
+    """)
+
+
+
+def uplift_case(case, h=0.05, b=0.305, zeta0=0.0005, tc=0.1, history="exponential",
+                L=15.0, dx=0.005, nLayers=5, dt=0.005, endTime=12.0, sponge=3.0):
+    """Tsunami generation by a rectangular bottom uplift (Hammack 1973 type),
+    half domain with a symmetry wall at x = 0."""
+    Nx = int(round(L / dx))
+    dy = dx
+    gx = [0.0, b, 5 * b, 10 * b, 20 * b, 30 * b]
+    gtxt = "\n".join(f"    G{i}    ({x:.6g} {dy/2:g} 0);" for i, x in enumerate(gx))
+    constant_files(case, nh_extra=f"""
+gauges
+{{
+{gtxt}
+}}
+
+bottomMotion
+{{
+    type        uplift;
+    min         ({-b:g} -1 0);
+    max         ({b:g} 1 0);
+    amplitude   {zeta0:g};
+    history     {history};
+    riseTime    {tc:g};
+}}
+
+forcingZones
+{{
+    outlet
+    {{
+        type        sponge;
+        start       ({L - sponge:g} 0 0);
+        end         ({L:g} 0 0);
+        sigmaMax    5;
+        exponent    2;
+    }}
+}}
+""")
+    nsteps = int(round(endTime / dt))
+    system_files(case, endTime=endTime, deltaT=dt, writeInterval=nsteps, nCorr=3, pTol=1e-12, libs=True)
+    blockmesh_flat(case, L, h, dy, Nx, nLayers)
+    common_fields(case)
+    p = os.path.join(case, "0/U")
+    s = open(p).read().replace("""    bottom
+    {
+        type            slip;
+    }""", """    bottom
+    {
+        type            nhMovingSlipVelocity;
+        value           uniform (0 0 0);
+    }""")
+    open(p, "w").write(s)
+    with open(os.path.join(case, "params.txt"), "w") as f:
+        f.write(f"h {h}\nb {b}\nzeta0 {zeta0}\ntc {tc}\ndx {dx}\n")
+    allrun(case, """
+    runApplication blockMesh
+    runApplication NHFoam
+    """)
+
+
+def slide_case(case, nLayers=10, dx=0.01, dt=0.005, endTime=4.0, slope=15.0,
+               hTop=0.1, hDeep=1.5, L=15.0, xc0=0.8):
+    """2D rigid solid slide on a plane slope (Grilli & Watts 2005 / Enet &
+    Grilli 2007 shape and law of motion), demonstration case."""
+    tanb = math.tan(math.radians(slope))
+    xToe = (hDeep - hTop) / tanb
+    xs = [0, xToe, L]
+    hs = [hTop, hDeep, hDeep]
+    dy = dx
+    gauges = [1.5, 2.5, 3.5, 5.0, 8.0]
+    gtxt = "\n".join(f"    G{g:g}    ({g:g} {dy/2:g} 0);" for g in gauges)
+    constant_files(case, nh_extra=f"""
+gauges
+{{
+{gtxt}
+}}
+
+bottomMotion
+{{
+    type        slide;
+    centre      ({xc0:g} 0 0);
+    direction   (1 0 0);
+    slopeAngle  {slope:g};
+    thickness   0.082;
+    length      0.395;
+    width       0;                  // 2D slide
+    terminalVelocity     1.70;
+    initialAcceleration  1.21;
+}}
+
+forcingZones
+{{
+    outlet
+    {{
+        type        sponge;
+        start       ({L - 3:g} 0 0);
+        end         ({L:g} 0 0);
+        sigmaMax    10;
+        exponent    2;
+    }}
+}}
+""")
+    nsteps = int(round(endTime / dt))
+    system_files(case, endTime=endTime, deltaT=dt, writeInterval=max(1, nsteps // 4),
+                 nCorr=3, nNonOrth=1, pTol=1e-10, libs=True)
+    blockmesh_profile(case, xs, hs, dy, dx, nLayers)
+    common_fields(case)
+    p = os.path.join(case, "0/U")
+    s = open(p).read().replace("""    bottom
+    {
+        type            slip;
+    }""", """    bottom
+    {
+        type            nhMovingSlipVelocity;
+        value           uniform (0 0 0);
+    }""")
+    open(p, "w").write(s)
+    allrun(case, """
+    runApplication blockMesh
+    runApplication NHFoam
+    """)
+
+
+def flume_case(case, H=0.041, T=1.01, h=0.4, L=30.0, dx=0.02, dt=0.01, nLayers=10,
+               zone=8.0, sigmaMax=20.0, exponent=2.0, endTime=30.0, conv=None):
+    """Flat flume: wave-making zone at the left, sponge at the right; for
+    checking the generated wave height."""
+    Nx = int(round(L / dx))
+    dy = dx
+    gauges = [zone + 1 + 2 * i for i in range(7)]
+    gtxt = "\n".join(f"    G{g:g}    ({g:g} {dy/2:g} 0);" for g in gauges)
+    constant_files(case, nh_extra=f"""
+gauges
+{{
+{gtxt}
+}}
+
+forcingZones
+{{
+    inlet
+    {{
+        type        wave;
+        start       ({zone:g} 0 0);
+        end         (0 0 0);
+        sigmaMax    {sigmaMax:g};
+        exponent    {exponent:g};
+        waveHeight  {H:g};
+        wavePeriod  {T:g};
+        depth       {h:g};
+        direction   (1 0 0);
+        rampTime    {2*T:g};
+    }}
+    outlet
+    {{
+        type        sponge;
+        start       ({L - 8:g} 0 0);
+        end         ({L:g} 0 0);
+        sigmaMax    {sigmaMax:g};
+        exponent    {exponent:g};
+    }}
+}}
+""")
+    nsteps = int(round(endTime / dt))
+    system_files(case, endTime=endTime, deltaT=dt, writeInterval=nsteps, nCorr=3, pTol=1e-10, conv=conv)
+    blockmesh_flat(case, L, h, dy, Nx, nLayers)
+    common_fields(case)
+
+
+def enet_grilli_case(case, d=61, dx=0.025, nLayers=5, dt=0.005, endTime=4.0,
+                     xWall=0.2, L=10.0, Ly=1.8, ygrade=1.0, sponge=3.0, conv=None,
+                     zgrade=1.0):
+    """NTHMP landslide benchmark 2: 3D rigid slide of Enet & Grilli (2007) on
+    a 15 deg slope, half tank with a symmetry wall on the axis (y = 0).
+    x is measured from the still-water shoreline; the domain starts at
+    x = xWall (no wetting and drying) and the slope meets the 1.5 m deep
+    tank bottom at x = 5.6 m."""
+    # Initial position of the slide centre and fitted law of motion
+    # (Enet & Grilli 2007; values as in the NHWAVE benchmark input)
+    slides = {61: dict(x0=0.551, ut=1.70, a0=1.12)}
+    s = slides[d]
+    tanb = math.tan(math.radians(15.0))
+    h0 = 1.5
+    xs = [xWall, h0 / tanb, L]
+    hs = [xWall * tanb, h0, h0]
+    Ny = int(round(Ly / dx))
+    gauges = {"g1": (s["x0"], 0.0), "g2": (1.469, 0.35), "g3": (1.929, 0.0),
+              "g4": (1.919, 0.5)}
+    gtxt = "\n".join(f"    {n}    ({x:g} {y:g} 0);" for n, (x, y) in gauges.items())
+    constant_files(case, nh_extra=f"""
+gauges
+{{
+{gtxt}
+}}
+
+bottomMotion
+{{
+    type        slide;
+    centre      ({s['x0']:g} 0 0);
+    direction   (1 0 0);
+    slopeAngle  15;
+    thickness   0.082;
+    length      0.395;
+    width       0.680;
+    epsilon     0.717;
+    terminalVelocity     {s['ut']:g};
+    initialAcceleration  {s['a0']:g};
+}}
+
+forcingZones
+{{
+    outlet
+    {{
+        type        sponge;
+        start       ({L - sponge:g} 0 0);
+        end         ({L:g} 0 0);
+        sigmaMax    5;
+        exponent    2;
+    }}
+}}
+""")
+    nsteps = int(round(endTime / dt))
+    system_files(case, endTime=endTime, deltaT=dt, writeInterval=max(1, nsteps // 8),
+                 nCorr=3, nNonOrth=1, pTol=1e-10, libs=True, conv=conv)
+    blockmesh_profile(case, xs, hs, Ly, dx, nLayers, zgrade=zgrade, Ny=Ny, ygrade=ygrade)
+    common_fields(case, walls=("left", "right", "axis", "side"), empty=False)
+    p = os.path.join(case, "0/U")
+    txt = open(p).read().replace("""    bottom
+    {
+        type            slip;
+    }""", """    bottom
+    {
+        type            nhMovingSlipVelocity;
+        value           uniform (0 0 0);
+    }""")
+    open(p, "w").write(txt)
+    with open(os.path.join(case, "params.txt"), "w") as f:
+        f.write(f"d {d}\nx0 {s['x0']}\nut {s['ut']}\na0 {s['a0']}\nb 0.395\n")
+    allrun(case, """
+    runApplication blockMesh
+    runApplication NHFoam
+    """)
+
+
+def hansen_svendsen_case(case, test="061071", nLayers=10, dx=0.02, dt=0.01, nPeriods=30,
+                         breaking=None, conv=None, H=None, zone=8.0, flat=6.0,
+                         xEnd=11.0, shelf=3.0, sigmaMax=20.0, zgrade=1.0):
+    """Hansen & Svendsen (1979): regular waves shoaling and breaking on a
+    1:34.26 slope from h0 = 0.36 m. x is measured from the toe of the slope
+    (as the lab data); the slope is cut at x = xEnd (no wetting and drying)
+    and continues as a flat shelf with a sponge that absorbs the bores."""
+    tests = {"061071": dict(T=1.667, H=0.0686), "031041": dict(T=3.333, H=0.0411)}
+    T = tests[test]["T"]
+    H = H or tests[test]["H"]
+    h0, s = 0.36, 1 / 34.26
+    hEnd = h0 - s * xEnd
+    x0 = -(zone + flat)
+    xs = [x0, 0.0, xEnd, xEnd + shelf]
+    hs = [h0, h0, hEnd, hEnd]
+    dy = dx
+    gx = [round(-1.0 + 0.1 * i, 3) for i in range(int(round((xEnd - 0.2 + 1.0) / 0.1)) + 1)]
+    gtxt = "\n".join(f"    G{i:03d}    ({x:g} {dy/2:g} 0);" for i, x in enumerate(gx))
+    brk = ""
+    if breaking:
+        brk = f"""
+breaking
+{{
+    model       HFA;
+    alpha       {breaking.get('alpha', 0.6):g};
+    beta        {breaking.get('beta', 0.3):g};
+}}
+"""
+    constant_files(case, nh_extra=f"""
+gauges
+{{
+{gtxt}
+}}
+
+forcingZones
+{{
+    inlet
+    {{
+        type        wave;
+        start       ({x0 + zone:g} 0 0);
+        end         ({x0:g} 0 0);
+        sigmaMax    {sigmaMax:g};
+        exponent    2;
+        waveHeight  {H:g};
+        wavePeriod  {T:g};
+        depth       {h0:g};
+        direction   (1 0 0);
+        rampTime    {2*T:g};
+    }}
+    outlet                   // damps the bores, keeps the water volume
+    {{
+        type        sponge;
+        start       ({xEnd + 0.2:g} 0 0);
+        end         ({xEnd + shelf:g} 0 0);
+        sigmaMax    {sigmaMax:g};
+        exponent    2;
+        relaxEta    false;
+    }}
+}}
+{brk}""")
+    endTime = nPeriods * T
+    nsteps = int(round(endTime / dt))
+    system_files(case, endTime=endTime, deltaT=dt, writeInterval=nsteps, nCorr=3,
+                 nNonOrth=1, pTol=1e-10, conv=conv or (CONV_BREAKING if breaking else CONV))
+    blockmesh_profile(case, xs, hs, dy, dx, nLayers, zgrade=zgrade)
+    common_fields(case)
+    with open(os.path.join(case, "params.txt"), "w") as f:
+        f.write(f"test {test}\nT {T}\nH {H}\n")
+    allrun(case, """
+    runApplication blockMesh
     runApplication NHFoam
     """)

@@ -27,6 +27,22 @@
         etaPred = etaN;
     }
 
+    // Bottom position at the new time
+    if (bedMotion.active())
+    {
+        columns.setLineBottomZ
+        (
+            columns.lineBottomZ0()
+          + bedMotion.displacement(columns.lineCentre(), runTime.value())
+        );
+    }
+
+    // Breaking columns (hydrostatic front approximation)
+    if (hfa)
+    {
+        #include "updateBreaking.H"
+    }
+
     // Relaxation zones on the free surface at the new time
     if (zones.active())
     {

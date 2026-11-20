@@ -70,7 +70,26 @@ eta.correctBoundaryConditions();
 // small-amplitude studies only)
 const bool moveMesh(nhProperties.getOrDefault<bool>("moveMesh", true));
 
-// Place the mesh on the initial free surface
+// Prescribed bottom motion (uplift, solid slide)
+bottomMotion bedMotion(nhProperties);
+
+if (bedMotion.active())
+{
+    if (!moveMesh)
+    {
+        FatalErrorInFunction
+            << "bottomMotion needs a moving mesh (moveMesh true)"
+            << exit(FatalError);
+    }
+
+    columns.setLineBottomZ
+    (
+        columns.lineBottomZ0()
+      + bedMotion.displacement(columns.lineCentre(), runTime.value())
+    );
+}
+
+// Place the mesh on the initial free surface (and bottom)
 if (moveMesh)
 {
     tmp<pointField> tnewPoints(columns.newPoints(etaCol, minDepth));
@@ -84,6 +103,7 @@ if (moveMesh)
             << " (largest point shift " << maxShift << " m)\n" << endl;
 
         mesh.movePoints(tnewPoints());
+        columns.updateGeometry();
     }
 }
 
@@ -272,4 +292,60 @@ volVectorField::Internal zoneSigmaU
 scalarField colSigma(columns.nColumns(), 0);
 scalarField colSigmaEta(columns.nColumns(), 0);
 
-const scalar volume0 = gSum(columns.columnArea()*etaCol);
+// Water volume at the start (changes only through relaxation zones)
+const scalar volume0 =
+    gSum(columns.columnArea()*(etaCol - columns.columnBottomZ()));
+
+
+// Wave breaking: hydrostatic front approximation (Smit et al. 2013)
+//     breaking  { model HFA; alpha 0.6; beta 0.3; hydrostaticFactor 1000; }
+// A column starts breaking when d(eta)/dt > alpha sqrt(g D) and keeps (or
+// spreads to a neighbouring column) while d(eta)/dt > beta sqrt(g D).
+// In breaking columns the non-hydrostatic pressure is suppressed by coupling
+// the cells of the column (and the surface face) with a large vertical
+// mobility in the pressure equation, so p_rgh stays uniform in the vertical
+// (hydrostatic) and the fluxes through the layer faces follow from
+// continuity.
+const dictionary breakingDict(nhProperties.subOrEmptyDict("breaking"));
+const word breakingModel
+(
+    breakingDict.getOrDefault<word>("model", "none")
+);
+const bool hfa(breakingModel == "HFA");
+
+if (breakingModel != "none" && !hfa)
+{
+    FatalIOErrorInFunction(nhProperties)
+        << "Unknown breaking model " << breakingModel
+        << ". Valid: none HFA" << exit(FatalIOError);
+}
+
+const scalar hfaAlpha(breakingDict.getOrDefault<scalar>("alpha", 0.6));
+const scalar hfaBeta(breakingDict.getOrDefault<scalar>("beta", 0.3));
+const scalar hfaFactor
+(
+    breakingDict.getOrDefault<scalar>("hydrostaticFactor", 1000)
+);
+
+if (hfa)
+{
+    Info<< "Wave breaking: hydrostatic front approximation, alpha "
+        << hfaAlpha << ", beta " << hfaBeta << nl << endl;
+}
+
+boolList colBreaking(columns.nColumns(), false);
+
+volScalarField breaking
+(
+    IOobject
+    (
+        "breaking",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        hfa ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimless, 0),
+    zeroGradientFvPatchScalarField::typeName
+);

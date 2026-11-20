@@ -32,6 +32,24 @@
     // Zero-flux walls and bottom (fixedFluxPressure)
     constrainPressure(p_rgh, U, phiHbyA, rAUf, MRF);
 
+    // Breaking columns: large vertical mobility of the surface face (the
+    // layer faces are handled in the pressure matrix below)
+    bool anyBreaking = false;
+
+    if (hfa)
+    {
+        scalarField& rAUfs = rAUf.boundaryFieldRef()[surfaceID];
+
+        forAll(colBreaking, coli)
+        {
+            if (colBreaking[coli])
+            {
+                anyBreaking = true;
+                rAUfs[coli] *= hfaFactor;
+            }
+        }
+    }
+
     // Implicit free-surface condition
     {
         mixedFvPatchScalarField& pSurf =
@@ -72,6 +90,42 @@
         (
             fvm::laplacian(rAUf, p_rgh) == fvc::div(phiHbyA)
         );
+
+        // Breaking columns: couple the cells of a column through a large
+        // extra mobility on the layer faces, so that p_rgh is uniform in the
+        // vertical (hydrostatic). Only the difference between the two cell
+        // values is used: scaling rAUf itself would also scale the explicit
+        // non-orthogonal correction, i.e. the horizontal pressure gradient
+        // on sloping layer faces, and drive spurious vertical fluxes.
+        if (anyBreaking)
+        {
+            scalarField& upper = p_rghEqn.upper();
+            scalarField& diag = p_rghEqn.diag();
+            const labelUList& own = mesh.owner();
+            const labelUList& nei = mesh.neighbour();
+            const scalarField& magSf = mesh.magSf().primitiveField();
+            const scalarField& dc = mesh.nonOrthDeltaCoeffs().primitiveField();
+            const scalarField& rAUfi = rAUf.primitiveField();
+            const labelListList& layerFaces = columns.columnLayerFaces();
+
+            forAll(colBreaking, coli)
+            {
+                if (colBreaking[coli])
+                {
+                    const labelList& lf = layerFaces[coli];
+                    forAll(lf, i)
+                    {
+                        const label facei = lf[i];
+                        const scalar c =
+                            (hfaFactor - 1)*rAUfi[facei]*magSf[facei]*dc[facei];
+
+                        upper[facei] += c;
+                        diag[own[facei]] -= c;
+                        diag[nei[facei]] -= c;
+                    }
+                }
+            }
+        }
 
         p_rghEqn.solve
         (

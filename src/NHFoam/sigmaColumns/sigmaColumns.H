@@ -92,6 +92,13 @@ class sigmaColumns
         //- Bottom-patch mesh face of each column
         labelList columnBottomFace_;
 
+        //- Internal faces between the layers of each column (top first)
+        labelListList columnLayerFaces_;
+
+        //- Neighbouring columns of each column (sharing a surface edge,
+        //  local to this processor)
+        labelListList columnNeighbours_;
+
         //- Mesh points of each vertical line (one line per surface-patch
         //  point, same order as the patch's local points), surface first
         labelListList lineMeshPoints_;
@@ -102,8 +109,14 @@ class sigmaColumns
         //- Sigma coordinate of each mesh point (0 bottom, 1 surface)
         scalarField pointSigma_;
 
-        //- Bottom elevation of each line
+        //- Bottom elevation of each line (current)
         scalarField lineBottomZ_;
+
+        //- Bottom elevation of each line in the initial mesh
+        scalarField lineBottomZ0_;
+
+        //- Horizontal position of each line (z = 0)
+        vectorField lineCentre_;
 
         //- Horizontal (projected) area of each column
         scalarField columnArea_;
@@ -196,6 +209,47 @@ public:
                 return pointSigma_;
             }
 
+            //- Internal faces between the layers of each column (top first)
+            const labelListList& columnLayerFaces() const
+            {
+                return columnLayerFaces_;
+            }
+
+            //- Bottom-patch mesh face of each column
+            const labelList& columnBottomFace() const
+            {
+                return columnBottomFace_;
+            }
+
+            const labelListList& columnNeighbours() const
+            {
+                return columnNeighbours_;
+            }
+
+            //- Number of vertical lines of points (surface-patch points)
+            label nLines() const
+            {
+                return lineMeshPoints_.size();
+            }
+
+            //- Horizontal position of each line
+            const vectorField& lineCentre() const
+            {
+                return lineCentre_;
+            }
+
+            //- Bottom elevation of each line in the initial mesh
+            const scalarField& lineBottomZ0() const
+            {
+                return lineBottomZ0_;
+            }
+
+            //- Current bottom elevation of each line
+            const scalarField& lineBottomZ() const
+            {
+                return lineBottomZ_;
+            }
+
             const scalarField& columnArea() const
             {
                 return columnArea_;
@@ -210,6 +264,15 @@ public:
             {
                 return columnBottomZ_;
             }
+
+
+        // Moving bottom
+
+            //- Set the bottom elevation of each line (used by newPoints)
+            void setLineBottomZ(const scalarField& zb);
+
+            //- Update the column geometry after the mesh has moved
+            void updateGeometry();
 
 
         // Mapping

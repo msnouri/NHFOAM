@@ -49,6 +49,7 @@ void Foam::sigmaColumns::findColumns()
     cellLayer_.setSize(mesh_.nCells(), -1);
     columnCells_.setSize(sp.size());
     columnBottomFace_.setSize(sp.size(), -1);
+    columnLayerFaces_.setSize(sp.size());
 
     forAll(sp, coli)
     {
@@ -57,6 +58,7 @@ void Foam::sigmaColumns::findColumns()
         label layer = 0;
 
         DynamicList<label> colCells(16);
+        DynamicList<label> layerFaces(16);
 
         while (true)
         {
@@ -119,6 +121,7 @@ void Foam::sigmaColumns::findColumns()
 
             if (mesh_.isInternalFace(oppFacei))
             {
+                layerFaces.append(oppFacei);
                 celli =
                 (
                     own[oppFacei] == celli
@@ -150,6 +153,7 @@ void Foam::sigmaColumns::findColumns()
         }
 
         columnCells_[coli].transfer(colCells);
+        columnLayerFaces_[coli].transfer(layerFaces);
     }
 
     label nMissing = 0;
@@ -193,6 +197,7 @@ void Foam::sigmaColumns::findLines()
 
     lineMeshPoints_.setSize(spMeshPoints.size());
     lineBottomZ_.setSize(spMeshPoints.size(), 0);
+    lineCentre_.setSize(spMeshPoints.size(), Zero);
     pointLine_.setSize(mesh_.nPoints(), -1);
     pointSigma_.setSize(mesh_.nPoints(), 0);
 
@@ -268,6 +273,8 @@ void Foam::sigmaColumns::findLines()
         }
 
         lineBottomZ_[linei] = zb;
+        lineCentre_[linei] =
+            vector(pts[line.first()].x(), pts[line.first()].y(), 0);
 
         forAll(line, i)
         {
@@ -377,6 +384,18 @@ Foam::sigmaColumns::sigmaColumns(const fvMesh& mesh, const dictionary& dict)
     findLines();
     calcGeometry();
 
+    lineBottomZ0_ = lineBottomZ_;
+
+    // Neighbouring columns across the surface-patch edges
+    {
+        const labelListList& ff = surfacePatch().faceFaces();
+        columnNeighbours_.setSize(ff.size());
+        forAll(ff, coli)
+        {
+            columnNeighbours_[coli] = ff[coli];
+        }
+    }
+
     label minLayers = labelMax;
     label maxLayers = 0;
     forAll(columnCells_, coli)
@@ -399,6 +418,30 @@ Foam::sigmaColumns::sigmaColumns(const fvMesh& mesh, const dictionary& dict)
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+
+void Foam::sigmaColumns::setLineBottomZ(const scalarField& zb)
+{
+    if (zb.size() != lineBottomZ_.size())
+    {
+        FatalErrorInFunction
+            << "Size " << zb.size() << " differs from the number of lines "
+            << lineBottomZ_.size() << exit(FatalError);
+    }
+
+    lineBottomZ_ = zb;
+}
+
+
+void Foam::sigmaColumns::updateGeometry()
+{
+    const vectorField& Cf = mesh_.faceCentres();
+
+    forAll(columnBottomFace_, coli)
+    {
+        columnBottomZ_[coli] = Cf[columnBottomFace_[coli]].z();
+    }
+}
+
 
 Foam::tmp<Foam::scalarField> Foam::sigmaColumns::columnValues
 (

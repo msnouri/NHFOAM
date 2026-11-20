@@ -89,6 +89,7 @@ class forcingZone
 
         word name_;
         bool isWave_;
+        bool relaxEta_;
         point start_;
         vector dir_;
         scalar length_;
@@ -115,6 +116,13 @@ public:
         const word& name() const
         {
             return name_;
+        }
+
+        //- Whether the zone also relaxes the surface elevation (false: it
+        //  damps the velocity only and conserves the water volume)
+        bool relaxEta() const
+        {
+            return relaxEta_;
         }
 
         //- Relaxation rate at a position (0 outside the zone)

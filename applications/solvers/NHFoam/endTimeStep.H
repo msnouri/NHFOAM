@@ -7,11 +7,11 @@
     p = p_rgh + (g & mesh.C());
 
     const scalarField depth(etaCol - columns.columnBottomZ());
-    const scalar volume = gSum(columns.columnArea()*etaCol);
+    const scalar volume = gSum(columns.columnArea()*depth);
 
     Info<< "Free surface: eta min/max = " << gMin(etaCol) << " / "
         << gMax(etaCol) << ", min depth = " << gMin(depth)
-        << ", volume change = " << volume - volume0 << endl;
+        << ", water volume change = " << volume - volume0 << endl;
 
     if (gMin(depth) < minDepth)
     {
