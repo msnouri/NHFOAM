@@ -212,6 +212,11 @@ structuredCoeffs { method simple; patches (bottom); simpleCoeffs { n (2 1 1); } 
 Each case runs with `./Allrun` and cleans with `./Allclean`. `validation/`
 holds the scripts used to generate cases and make the figures below.
 
+The figures are typeset with LaTeX (Computer Modern), and `doc/figures` has
+both PNG and vector PDF versions. Regenerating them needs `latex`, `dvipng`
+and the `cm-super` fonts; without them, the scripts fall back to
+matplotlib's own Computer Modern.
+
 ---
 
 ## 5. Verification

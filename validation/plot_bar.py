@@ -2,6 +2,7 @@
 """Submerged bar (Luth et al. 1994 case A): NHFoam gauges vs lab data.
 
 usage: plot_bar.py <labDataDir> <out.png> <case>[:label] [<case>[:label] ...]
+(also writes out.pdf)
 
 Lab data: fengyanshi/BENCHMARK_FUNWAVE, car_luth_AC/lab_data/CaseA.
 For each case one time shift (fitted at the first gauge, x = 22 m) is applied
@@ -10,6 +11,9 @@ to all gauges; the window starts 6 periods before the end of the run.
 import sys, os, numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from latex_style import use_latex, save
+
+use_latex(10)
 
 labdir, out = sys.argv[1:3]
 cases = [(c.split(":")[0], c.split(":")[1] if ":" in c else os.path.basename(c)) for c in sys.argv[3:]]
@@ -52,17 +56,17 @@ for k, x in enumerate(xs):
     ax = axes.flat[k]
     ax.plot(lab[x][:, 0], 100 * lab[x][:, 1], "o", ms=3.5, mfc="none", color="#c0392b",
             label="Luth et al. (1994)" if k == 0 else None)
-    ax.set_title(f"x = {x:g} m", fontsize=10)
+    ax.set_title(rf"$x = {x:g}$ m")
     ax.set_ylim(-1.7, 3.2)
     ax.grid(alpha=0.3)
     if k % 2 == 0:
-        ax.set_ylabel("η [cm]")
+        ax.set_ylabel(r"$\eta$ [cm]")
 for ax in axes[-1]:
-    ax.set_xlabel("t [s] (one time shift per run)")
-axes.flat[0].legend(loc="upper right", fontsize=8)
-fig.suptitle("Submerged bar, case A (H = 2 cm, T = 2.02 s)", fontsize=12)
+    ax.set_xlabel(r"$t$ [s] (one time shift per run)")
+axes.flat[0].legend(loc="upper right")
+fig.suptitle(r"Submerged bar, case A ($H = 2$ cm, $T = 2.02$ s)")
 fig.tight_layout()
-fig.savefig(out, dpi=130)
+save(fig, out, dpi=130)
 print("rms error [cm] per gauge:")
 print("x      " + "  ".join(f"{lbl:>18s}" for lbl, _ in report))
 for k, x in enumerate(xs):
