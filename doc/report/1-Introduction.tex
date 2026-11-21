@@ -1,0 +1,49 @@
+\section{Introduction}
+\label{sec:intro}
+
+Non-hydrostatic models on surface- and terrain-following ($\sigma$) layers,
+such as SWASH \citep{zijlema2011} and NHWAVE \citep{ma2012}, resolve the
+dispersion of short waves with a few vertical layers. Because the pressure is
+split into a hydrostatic part, carried by the free surface, and a
+non-hydrostatic part, they are much cheaper than free-surface Navier--Stokes
+solvers based on the volume of fluid, while they keep the vertical structure of
+the flow that depth-integrated Boussinesq models lose. Both codes use
+structured grids in the horizontal.
+
+\NHFOAM\ brings this class of model into OpenFOAM \citep{weller1998}. It solves
+the incompressible Navier--Stokes equations for water only, on a $\sigma$-mesh
+whose top boundary is the free surface $z=\eta(x,y,t)$ and moves with it.
+Because it is an OpenFOAM solver, the horizontal mesh can be any
+two-dimensional mesh (quadrilaterals, triangles or polygons) extruded into
+vertical columns, and the model uses OpenFOAM's parallelism, boundary
+conditions, turbulence models, \code{fvOptions} and function objects. A
+longer-term aim is to couple it to the volume-of-fluid and two-phase sediment
+solvers of OpenFOAM (\code{interFoam}, \code{sedInterFoam}) near structures and
+in the surf zone.
+
+The present version has
+\begin{itemize}[nosep]
+  \item 2DV and 3D meshes, unstructured in the horizontal;
+  \item the pressure on the layer interfaces, as in NHWAVE and SWASH, with a
+        column (line) preconditioner for the resulting matrix, and the
+        cell-centred pressure of OpenFOAM as an alternative;
+  \item a semi-implicit free surface with no gravity-wave Courant limit;
+  \item wave generation and absorption in relaxation zones;
+  \item prescribed seabed motion (bottom uplift, rigid landslides);
+  \item depth-induced breaking with the hydrostatic front approximation
+        \citep{smit2013}.
+\end{itemize}
+It has no wetting and drying yet.
+
+This report documents the model and collects its verification and validation.
+Section~\ref{sec:model} gives the equations and Section~\ref{sec:numerics} the
+numerical method, including the pressure arrangement and the time integration.
+Section~\ref{sec:verification} covers the first round of tests: analytical
+checks, the dispersion of standing waves, the decay of progressive waves, the
+submerged bar, seabed motion and breaking, with NHWAVE and REEF3D::NHFLOW
+\citep{bihs2016} run on the same set-ups. Section~\ref{sec:ma2012} follows the
+test programme of \citet{ma2012}, the paper that introduced NHWAVE, case by
+case and against NHWAVE only. It starts from the simplest benchmarks, uses
+each one to find and fix weaknesses of \NHFOAM, and states what the fixes
+changed. Section~\ref{sec:conclusions} lists the limitations and the plans.
+Appendix~\ref{app:usage} explains how to build the code and set up a case.

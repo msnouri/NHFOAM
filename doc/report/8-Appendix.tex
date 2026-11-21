@@ -1,0 +1,150 @@
+\section{Building the code and setting up a case}
+\label{app:usage}
+
+\subsection{Building}
+
+\NHFOAM\ needs the ESI OpenFOAM line (\url{https://www.openfoam.com}). It was
+compiled and run with v1912, and every API call was checked against the v2512
+headers. With the OpenFOAM environment loaded, \code{./Allwmake} builds
+\begin{itemize}[nosep]
+  \item \code{libNHFOAM}: the $\sigma$-column structure, mesh motion, the
+        interface pressure matrix and the \code{sigmaColumn} preconditioner,
+        linear wave theory, relaxation zones, seabed motion and the
+        \code{nhMovingSlipVelocity} condition;
+  \item \code{NHFOAM}: the solver;
+  \item \code{nhSetWaves}: initial conditions (\code{standing},
+        \code{solitary}, \code{linear}, \code{circularMode}).
+\end{itemize}
+
+\subsection{Mesh and fields}
+
+The mesh must be a vertical extrusion between a top patch (\code{surface}) and
+a bottom patch (\code{bottom}), with the points of each column on a vertical
+line: \code{blockMesh} with vertical block edges, \code{extrudeMesh} from a 2D
+mesh, or gmsh (\code{Extrude} with \code{Layers} and \code{Recombine}) followed
+by \code{gmshToFoam}. The bathymetry is built into the mesh, with the top of
+the mesh at the still-water level. Uniform layers are best with the interface
+pressure (Section~\ref{sec:dispersion}): two layers keep the period error within
+0.6\% up to $kh = 7$, three layers within 0.21\%.
+
+\begin{table}[ht]
+\centering
+\caption{Boundary conditions of the fields in \code{0/}.}
+\label{tab:fields}
+\small
+\begin{tabular}{llll}
+\toprule
+field & \code{surface} & \code{bottom}, walls & notes \\
+\midrule
+\code{U} & \code{zeroGradient} & \code{slip} or \code{noSlip} & \code{nhMovingSlipVelocity} on a moving bottom \\
+\code{p\_rgh} & \code{mixed} & \code{fixedFluxPressure} & the mixed coefficients are set by \NHFOAM \\
+\code{eta} & \code{zeroGradient} & \code{zeroGradient} & one value per column \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{\code{constant/NHFOAMProperties}}
+
+\begin{verbatim}
+surfacePatch     surface;     // top patch
+bottomPatch      bottom;      // bottom patch
+minDepth         1e-4;        // smallest depth used to place mesh points
+stillWaterLevel  0;           // reference for the relaxation-zone targets
+pressureLocation interface;   // or cell
+
+gauges                        // -> postProcessing/gauges/<t0>/eta.dat
+{
+    G1  (5.7 0 0);
+}
+
+forcingZones
+{
+    inlet                     // generation and absorption
+    {
+        type        wave;
+        start       (8 0 0);  // sigma_r = 0 here ...
+        end         (0 0 0);  // ... sigmaMax here
+        sigmaMax    20;  exponent 2;
+        waveHeight  0.02;  wavePeriod 2.02;  depth 0.4;
+        direction   (1 0 0);  rampTime 4.04;
+    }
+    outlet
+    {
+        type        sponge;
+        start       (46 0 0);  end (54 0 0);
+        sigmaMax    20;
+        // relaxEta false;    // damp the velocity only
+    }
+}
+
+breaking { model HFA; alpha 0.6; beta 0.3; hydrostaticFactor 1000; }
+
+bottomMotion                  // uplift, or slide (see the source)
+{
+    type uplift;  min (-0.305 -1 0);  max (0.305 1 0);
+    amplitude 0.0005;  history exponential;  riseTime 0.1;
+}
+\end{verbatim}
+
+\subsection{Schemes and solution controls}
+
+\begin{verbatim}
+ddtSchemes { default backward 1; }        // "1": full ddt flux correction
+divSchemes
+{
+    div(phi,U)  Gauss filteredLinear2V 0.2 0;  // non-breaking waves
+//  div(phi,U)  Gauss limitedLinearV 1;        // with breaking (bores)
+}
+
+PIMPLE
+{
+    nOuterCorrectors          1;
+    nCorrectors               3;
+    nNonOrthogonalCorrectors  1;     // over sloping beds
+    fluxExtrapolation         true;  // default with backward
+}
+
+p_rgh
+{
+    solver          PCG;
+    preconditioner  sigmaColumn;     // DIC in the cell layout
+    tolerance       1e-10;
+    relTol          0.01;
+}
+\end{verbatim}
+
+Without the ddt coefficient OpenFOAM limits its ddt flux correction, and waves
+are visibly damped; \NHFOAM\ warns if it is missing. In the interface layout
+only PCG and PBiCGStab are used, and any preconditioner other than
+\code{diagonal} or \code{none} is replaced by \code{sigmaColumn}. The unknowns
+are written as \code{pI}, the pressure on the bottom interface of each cell.
+
+The time step should resolve the shortest wave that matters, not only the
+peak period: behind the submerged bar the free higher harmonics have periods
+of $T/2$ and $T/3$ (Section~\ref{sec:bar10}).
+
+\subsection{Initial conditions and parallel runs}
+
+Initial conditions are set with \code{nhSetWaves}
+(\code{system/nhSetWavesDict}); \NHFOAM\ moves the mesh onto the initial
+$\eta$ at start-up. Whole columns must stay on one processor, so the
+decomposition uses the \code{structured} method on the bottom patch:
+\begin{verbatim}
+method structured;
+structuredCoeffs
+{
+    method  simple;
+    patches (bottom);
+    simpleCoeffs { n (2 1 1); }
+}
+\end{verbatim}
+
+\subsection{Tutorials and validation scripts}
+
+The tutorials are \code{standingWave}, \code{solitaryWave},
+\code{submergedBar}, \code{circularBasin} (3D unstructured prisms),
+\code{bottomUplift}, \code{landslide3D} and \code{breakingSlope}. Each runs with
+\code{./Allrun}. The folder \code{validation/} holds the scripts that build the
+validation cases (\code{make\_case.py}, \code{ma2012.py},
+\code{other\_models.py} for the NHWAVE and REEF3D::NHFLOW input) and make the
+figures of this report (\code{make\_figures.sh}).

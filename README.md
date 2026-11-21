@@ -16,7 +16,11 @@ function objects.
 > prescribed seabed motion (tsunami generation, solid landslides) and
 > depth-induced breaking with the hydrostatic front approximation. No wetting
 > and drying yet. See *Limitations* and *Roadmap* below.
-
+>
+> **Report:** the model, its verification and its validation against NHWAVE
+> (following the tests of Ma et al. 2012) are documented in
+> [`doc/report/NHFOAM_report.pdf`](doc/report/NHFOAM_report.pdf) (LaTeX
+> sources in `doc/report`).
 
 ---
 
@@ -749,9 +753,9 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | 4.1 standing wave in a closed basin, kD = π, 2π, 3π | linear theory | 6.1 |
 | 4.2 solitary wave, H/h = 0.5 | exact solution | 6.2 |
 | 4.3 periodic waves over a submerged bar | Luth et al. (1994) | 6.3 |
-| 4.4 elliptic shoal on a 1:50 slope | Berkhoff et al. (1982) | runs in progress |
+| 4.4 elliptic shoal on a 1:50 slope | Berkhoff et al. (1982) | 6.4 |
 | 4.5 breaking solitary wave run-up | Synolakis (1987) | needs wetting and drying |
-| 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 5.5 (rerun with the fixes in progress) |
+| 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 6.5 (and 5.5) |
 | 4.7 longshore current on a plane beach | Visser (1991) | needs wetting and drying |
 
 Two of the tests changed the code and its defaults: the standing waves
@@ -829,6 +833,63 @@ than 0.005 s. Most of the rms error is this phase error, which both models
 share. A second outer corrector, filtered convection or the TVD
 scheme change the rms error by less than 0.02 cm.
 
+### 6.4 Elliptic shoal (Berkhoff et al. 1982)
+
+![berkhoff](doc/figures/ma2012_berkhoff.png)
+
+The bathymetry of Ma et al. (2012) (their eqs. 49–51) matches NHWAVE's
+`examples/berkhoff` to 2 mm. To keep both runs to a few hours on one core,
+the grid is twice as coarse as in the paper in x and y (Δx = 5 cm,
+Δy = 10 cm, 600 × 200 columns, 29 cells per wavelength offshore) with 3
+layers. NHWAVE: boundary wavemaker, 3 m sponge, CFL 0.5, bottom drag 0.006
+as distributed; NHFOAM: 3 m wave zone upstream of NHWAVE's wavemaker, the
+same sponge, Δt = 10 ms, flux extrapolation, `filteredLinear2V`. NHFOAM's
+wave train arrives 2.25 s later (zone and ramp), so its wave heights are
+taken over the five periods ending at 32.25 s, NHWAVE's over those ending at
+30 s. Normalised rms error of H per section (Ma et al.'s definition):
+
+| section | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | mean |
+|---|---|---|---|---|---|---|---|---|---|
+| NHFOAM, Δx = 5 cm | 0.06 | 0.12 | 0.13 | 0.18 | 0.21 | 0.24 | 0.14 | 0.14 | 0.15 |
+| NHWAVE, Δx = 5 cm | 0.41 | 0.45 | 0.54 | 0.62 | 0.67 | 0.56 | 0.52 | 0.46 | 0.53 |
+| NHWAVE, Δx = 2.5 cm, 5 layers (Ma et al. 2012) | 0.07 | – | 0.11 | – | 0.11 | – | – | – | – |
+
+NHFOAM reproduces the focusing (2.1–2.2 H₀ at sections 3–4) on the coarse
+grid, with errors at sections 1 and 3 close to those of NHWAVE on the
+paper's grid. On the coarse grid NHWAVE has the right pattern but only about
+60% of the heights: its incident waves lose 30% of their height in the first
+10 m, NHFOAM's 5%. Sections 4–8 are not fully established by the end of the
+window (their errors move by up to 0.08 with a ±1 s shift).
+
+The NHFOAM run with `filteredLinear2V` failed at t ≈ 35 s, after the
+window and outside the measured area: in the shallow corner at the south
+wall (h = 0.07 m from x ≈ 22.7 m) the shoaled waves reach H/h ≈ 1 and break.
+Restarted from 30 s with `limitedLinearV` and the HFA, it ran to 37 s (up to
+171 breaking columns there) with the same mean error over the sections
+(0.17 at the window ending at 34.5 s, 0.14 at 37 s). A domain in which waves
+break anywhere needs the TVD scheme and the breaking model.
+
+### 6.5 3D rigid landslide (rerun of 5.5 with the fixes)
+
+![landslide2](doc/figures/ma2012_landslide.png)
+
+The leading trough and crest change by less than 2%. The trailing waves,
+already too large in 5.5, grew by 10–25% with the smaller numerical damping.
+Largest crest and the two after it [mm]:
+
+| | g2 | g3 | g4 |
+|---|---|---|---|
+| lab | 15.0, 9.1, 3.3 | 22.2, 11.3, 3.5 | 11.3, 6.4 |
+| NHFOAM | 16.7, 14.9, 10.3 | 24.1, 17.4, 11.7 | 12.8, 10.3, 11.1 |
+| NHFOAM before the fixes | 16.7, 13.2, 7.4 | 23.9, 15.9, 9.2 | 13.0, 9.7, 9.2 |
+| NHWAVE | 16.3, 8.3, 1.1 | 20.5, 12.9, 2.5 | 12.3, 8.5, 3.4 |
+
+The excess is therefore not missing numerical damping. Its likely cause is
+the wall that replaces the beach 0.2 m from the shoreline: the waves the
+slide sends shoreward are reflected there and reach the gauges at about
+1.5 t₀, when the excess starts, while on NHWAVE's beach they run up. The
+test needs wetting and drying to be conclusive.
+
 ## 7. Limitations (this version)
 
 - **No wetting and drying.** The depth is only limited by `minDepth`. Runup,
@@ -853,6 +914,8 @@ scheme change the rms error by less than 0.02 cm.
   build up in closed flumes. Over the submerged bar they shift the phase of
   the waves by about 0.2 s within 20 s of simulated time, more than in
   NHWAVE and REEF3D::NHFLOW (5.4). Compare long runs at the same times.
+- **Trailing waves of the landslide** are up to three times the measured
+  ones (5.5, 6.5), probably because a wall replaces the beach.
 - **Phase over the submerged bar.** With 3 layers, NHFOAM and NHWAVE both
   have the waves behind the bar up to 0.08 s early (6.3). The cause (linear
   wave generation, long waves of the flume) is not yet identified.

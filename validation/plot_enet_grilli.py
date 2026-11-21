@@ -34,7 +34,23 @@ panels = [("g2", 1, r"$g_2$: $(x, y) = (1.469, 0.35)$ m"),
           ("g4", 3, r"$g_4$: $(x, y) = (1.919, 0.5)$ m")]
 fig, axes = plt.subplots(len(panels) + 1, 1, figsize=(7.5, 9.5), sharex=True)
 report = []
+crests = []
 styles = ["-", "--", "-.", ":", (0, (1, 1))]
+
+
+def trailing_crests(t, e, n=3):
+    """The largest crest (t < 2.5 t0) and the n - 1 crests after it, in mm:
+    the maximum between successive zero up-crossings."""
+    m = t < 2.5 * t0
+    t, e = t[m], e[m]
+    up = np.where((e[:-1] < 0) & (e[1:] >= 0))[0]
+    seg = [e[a:b] for a, b in zip(up[:-1], up[1:])] + ([e[up[-1]:]] if len(up) else [])
+    seg = [x for x in seg if len(x) > 2]
+    if not seg:
+        return []
+    mx = [1000 * x.max() for x in seg]
+    k = int(np.argmax(mx))
+    return mx[k:k + n]
 
 
 def gauges(kind, case):
@@ -61,9 +77,11 @@ for (kind, case, label), col, ls in zip(runs, cols, styles):
         # extremes of the first wave train (t < 2.5 s)
         w = lab[m, 0] < 2.5
         row += [1000 * yl[w].min(), 1000 * el[w].min(), 1000 * yl[w].max(), 1000 * el[w].max()]
+        crests.append((label, g, trailing_crests(t, e)))
     report.append(row)
 axes[0].set_title(r"$g_1$: $(x, y) = (x_0, 0)$, above the initial slide position (no lab record)")
 for ax, (g, k, title) in zip(axes[1:], panels):
+    crests.append(("lab", g, trailing_crests(lab[:, 0], smooth(lab[:, k] / 1000))))
     ax.plot(lab[:, 0] / t0, smooth(lab[:, k] / 1000) / b, "--", color="k", lw=1.2,
             label="Enet \\& Grilli (2007)")
     ax.set_title(title)
@@ -71,14 +89,18 @@ for ax in axes:
     ax.set_ylabel(r"$\eta / b$")
     ax.grid(alpha=0.3)
     ax.set_xlim(0, 2.5)
-axes[1].legend(loc="lower right")
-axes[0].legend(loc="lower right")
+h, l = axes[1].get_legend_handles_labels()
+fig.legend(h, l, loc="lower center", ncol=len(l), fontsize=10, frameon=False)
 axes[-1].set_xlabel(r"$t / t_0$, $t_0 = u_t / a_0 = 1.52$ s")
 fig.suptitle(r"3D rigid slide, Enet \& Grilli (2007), $d = 61$ mm")
-fig.tight_layout()
+fig.tight_layout(rect=(0, 0.03, 1, 1))
 save(fig, out, dpi=130)
 print("first wave train (t < 2.5 s), mm:  lab min / model min / lab max / model max")
 for r in report:
     print(r[0])
     for (g, k, title), i in zip(panels, range(1, len(r), 4)):
         print(f"  {g}: " + " ".join(f"{v:8.2f}" for v in r[i:i + 4]))
+print("largest crest and the two after it, mm:")
+for g, k, title in panels:
+    print(f"  {g}: " + "  |  ".join(f"{lab_}: " + " ".join(f"{v:5.1f}" for v in c)
+                                     for lab_, gg, c in crests if gg == g))

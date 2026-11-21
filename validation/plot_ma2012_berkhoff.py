@@ -3,14 +3,17 @@
 height along the eight measurement sections, NHFOAM and NHWAVE against the
 lab data, and the normalised rms error of Ma et al. per section.
 
-usage: plot_ma2012_berkhoff.py <labDir> <out.png> [kind:]<case>[:label] ...
+usage: plot_ma2012_berkhoff.py <labDir> <out.png> [kind:]<case>[:label[@tEnd]] ...
     kind = nhfoam (default) | nhwave; the gauges/stations are those of
     ma2012.berk_points() (ma2012.berkhoff_nhfoam / berkhoff_nhwave)
     labDir: NHWAVE examples/berkhoff/postprocessing (section1-5.dat: y and
             amplitude [mm]; section678.dat: -x and the amplitudes of 6-8)
 (also writes out.pdf)
 
-Wave height: mean of max - min over each of the last five periods.
+Wave height: mean of max - min over each of the five periods before tEnd
+(default: the end of the run). A later tEnd for a run whose waves are
+generated later (a relaxation zone instead of a boundary wavemaker) compares
+the two wave trains at the same stage.
 """
 import os, sys
 import numpy as np
@@ -66,6 +69,10 @@ styles = [("-", "#1f5fa8"), ("--", "#e67e22"), ("-.", "#7f8c8d")]
 report = []
 for (kind, path, label), (ls, col) in zip(runs, styles):
     t, eta = read(kind, path)
+    if "@" in label:
+        label, te = label.rsplit("@", 1)
+        keep = t <= float(te) + 1e-9
+        t, eta = t[keep], eta[keep]
     H = heights(t, eta)
     errs = []
     for k in range(1, 9):

@@ -1,0 +1,72 @@
+\section{Conclusions, limitations and plans}
+\label{sec:conclusions}
+
+\NHFOAM\ follows NHWAVE's pressure arrangement on OpenFOAM's unstructured,
+moving $\sigma$-meshes. The tests of \citet{ma2012} were run with both models
+on the same set-ups, from the simplest upwards, and they changed the code:
+\begin{itemize}[nosep]
+  \item \textbf{Time accuracy.} With one outer corrector the convection term
+        was linearised with the flux of the previous time level, which made the
+        scheme first order in time for nonlinear waves. The convecting flux is
+        now extrapolated from the last two levels. A solitary wave of
+        $H/h=0.5$ lost 6.4\% of its height in 150 m before and 1.0\% after the
+        fix (NHWAVE 2.3\%), at no extra cost.
+  \item \textbf{Convection.} The TVD scheme damps steep short waves even when
+        they do not break; filtered central differencing
+        (\code{filteredLinear2V 0.2 0}) is now recommended for non-breaking
+        waves. It reduced the standing-wave error to 0.16--0.25\% for
+        $kD\ge 2\pi$ (NHWAVE 0.6--4.8\%) and stayed stable in 40--65 s runs over
+        the submerged bar. Breaking still needs the TVD scheme.
+  \item \textbf{Consistency with NHWAVE.} After the fix, the phase of the waves
+        over and behind the submerged bar agrees with NHWAVE's. The closer
+        match of the measured phase before the fix came from the first-order
+        lag, which slowed the waves by about 0.5\%.
+  \item \textbf{Resolution.} On the elliptic shoal, with twice the paper's
+        grid spacing and three layers, \NHFOAM's errors at the first sections
+        (0.06 and 0.13) are close to NHWAVE's on the paper's grid (0.07 and
+        0.11), while NHWAVE on the coarse grid loses 30\% of the incident wave
+        height before the shoal.
+  \item \textbf{Robustness.} A domain in which waves break anywhere needs the
+        TVD scheme and the breaking model, even outside the region of
+        interest: the shoal run with the filtered scheme failed when the waves
+        broke in a shallow corner, and ran on with \code{limitedLinearV} and
+        the hydrostatic front approximation.
+\end{itemize}
+
+\paragraph{Limitations.}
+\begin{itemize}[nosep]
+  \item \textbf{No wetting and drying.} Run-up, inundation and the setup at the
+        shoreline cannot be modelled yet; beaches must end in a wall or a
+        shelf with a sponge. Tests 4.5 and 4.7 of \citet{ma2012} wait for it.
+  \item \textbf{Breaking} has been tested on one case. The onset is right, but
+        the hydrostatic bores lose too little energy in the surf zone, where
+        the wave heights are up to twice the measured ones. Breaking columns
+        spread only to neighbours on the same processor.
+  \item \textbf{Wave generation} uses linear targets in relaxation zones only.
+        Steep or long waves carry spurious free harmonics. There is no
+        boundary wavemaker and no irregular, cnoidal or stream-function input.
+  \item \textbf{Long waves in closed flumes.} The zones absorb long waves only
+        partly and the wave-making zone does not conserve volume, so long waves
+        of a few millimetres build up and shift the phase over shallow bars in
+        long runs.
+  \item \textbf{Restarts} do not save the time history of $\eta$ and
+        $\bm{u}_f$; the first step after a restart is Euler and first order.
+  \item \textbf{Landslide trailing waves} are 1.5--3 times the measured ones
+        (Sections~\ref{sec:seabed} and \ref{sec:ma-landslide}), probably
+        because a wall replaces the beach.
+\end{itemize}
+
+\paragraph{Plans.} In order of priority:
+\begin{enumerate}[nosep]
+  \item wetting and drying with thin-film columns and $q$ switched off in very
+        shallow water, then tests 4.5 and 4.7 of \citet{ma2012};
+  \item breaking: the dissipation of the bores (momentum-conserving face depths
+        at the fronts, or a small eddy viscosity there), a kinematic onset
+        criterion and stabilised $k$--$\omega$ \citep{larsen2018} for
+        many-layer runs;
+  \item volume-conserving wave-making zones and absorption of long waves;
+  \item nonlinear and irregular wave generation and a boundary wavemaker;
+  \item depth-integrated granular slides for landslide tsunamis;
+  \item coupling to \code{interFoam} and \code{sedInterFoam} through relaxation
+        zones, and hybrid meshes around structures.
+\end{enumerate}

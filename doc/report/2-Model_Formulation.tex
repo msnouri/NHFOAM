@@ -1,0 +1,120 @@
+\section{Model formulation}
+\label{sec:model}
+
+\subsection{Governing equations}
+\label{sec:equations}
+
+The water has constant density $\rho$ and occupies
+$z_b(x,y,t) \le z \le \eta(x,y,t)$, where $z_b$ is the seabed and $\eta$ the
+free surface. With the velocity $\bm{u}=(u,v,w)$, the incompressible
+Navier--Stokes equations read
+\begin{align}
+  \nabla\cdot\bm{u} &= 0, \label{eq:cont}\\
+  \frac{\partial \bm{u}}{\partial t} + \nabla\cdot(\bm{u}\bm{u})
+  - \nabla\cdot\left[\nu_{\mathrm{eff}}\left(\nabla\bm{u} + \nabla\bm{u}^{T}\right)\right]
+  &= -\nabla \prgh + \bm{f}, \label{eq:mom}
+\end{align}
+where $\nu_{\mathrm{eff}}$ is the molecular plus any turbulent viscosity and
+$\bm{f}$ the forcing of the relaxation zones (Section~\ref{sec:zones}). The
+kinematic pressure is written as
+\begin{equation}
+  \prgh = \frac{p}{\rho} + g z = g\eta + q ,
+  \label{eq:prgh}
+\end{equation}
+where $g\eta$ is the hydrostatic part and $q$ the non-hydrostatic part. In
+hydrostatic equilibrium $p/\rho = g(\eta - z)$, so $\prgh = g\eta$ is uniform in
+the vertical. Gravity does not appear explicitly in \eqref{eq:mom}, so still
+water stays exactly at rest on any mesh, however skewed the cells are over a
+steep bottom.
+
+\subsection{$\sigma$-mesh and its motion}
+\label{sec:sigma}
+
+The mesh is a vertical extrusion of a horizontal mesh. Each face of the top
+patch (\code{surface}) defines one water column, and the points of a column lie
+on vertical lines. The points move vertically only:
+\begin{equation}
+  z = z_b + \sigma\,(\eta - z_b), \qquad \sigma\in[0,1],
+  \label{eq:sigma}
+\end{equation}
+where $\sigma$ of each point is taken from the initial mesh, so any vertical
+grading is kept. The equations are solved in physical coordinates on the moving
+mesh (arbitrary Lagrangian--Eulerian form): there are no metric terms of a
+$\sigma$-transformation, and OpenFOAM's swept-volume mesh fluxes satisfy the
+space conservation law. The elevation $\eta$ is stored once per column and
+interpolated to the surface points with inverse-distance weights.
+
+\subsection{Free surface and bottom}
+\label{sec:bc}
+
+At the free surface the pressure is atmospheric, so
+\begin{equation}
+  q = 0, \qquad \prgh = g\eta \qquad \text{at } z=\eta .
+  \label{eq:dynamic}
+\end{equation}
+The kinematic condition is used in its integral form: the change of the
+water depth of a column balances the net inflow,
+\begin{equation}
+  \frac{\partial (\eta - z_b)}{\partial t} + \nabla_h\cdot \int_{z_b}^{\eta}\bm{u}_h\,\dd z = 0 ,
+  \label{eq:kinematic}
+\end{equation}
+which the discrete method imposes column by column
+(Section~\ref{sec:freesurface}). The bottom is impermeable, with a slip or
+no-slip condition. When the bottom moves, the boundary condition
+\code{nhMovingSlipVelocity} gives the fluid the normal velocity of the bottom
+and leaves it free to slip tangentially, so that the flux through the bottom
+faces equals their swept volume. Lateral boundaries are walls, symmetry planes
+or the outer edges of relaxation zones.
+
+\subsection{Wave generation and absorption}
+\label{sec:zones}
+
+Relaxation zones relax the velocity and the surface towards a target
+$(\bm{u}_t,\eta_t)$:
+\begin{equation}
+  \bm{f} = -\sigma_r(\chi)\,(\bm{u}-\bm{u}_t),\qquad
+  \frac{\partial \eta}{\partial t} = \ldots - \sigma_r(\chi)\,(\eta-\eta_t),\qquad
+  \sigma_r(\chi) = \sigma_{\max}\,\chi^{n},
+  \label{eq:relax}
+\end{equation}
+where $\chi\in[0,1]$ grows linearly from the inner edge of the zone
+(\code{start}) to its outer edge (\code{end}). Both terms are implicit. A zone of
+type \code{wave} uses a linear (Airy) wave of height $H$ and period $T$ as the
+target, ramped up over a time $t_{\mathrm{ramp}}$; it generates the incident
+waves and absorbs the reflected ones. A zone of type \code{sponge} has still
+water as its target, or relaxes the velocity only (\code{relaxEta false}),
+which keeps the water volume, e.g.\ ahead of a truncated beach.
+
+\subsection{Seabed motion}
+\label{sec:bottommotion}
+
+A prescribed displacement moves the bottom points,
+$z_b(x,y,t) = z_{b0}(x,y) + \Delta z(x,y,t)$, and the $\sigma$-mesh follows
+\eqref{eq:sigma}. No change of the free-surface condition is needed, since the
+surface flux of each column already contains the volume pushed up by the
+bottom. Two motions are built in.
+\begin{itemize}[nosep]
+  \item \code{uplift}: a box raised by $\zeta_0$ with an exponential,
+        $\zeta_0\,(1-e^{-\alpha t})$ with $\alpha = 1.11/t_c$
+        \citep{hammack1973}, a half-cosine or a linear history.
+  \item \code{slide}: a rigid quasi-Gaussian slide on a plane slope
+        \citep{grilli2005,enet2007}, of thickness
+        $\zeta = \frac{T_s}{1-\epsilon}\left[\mathrm{sech}(k_b\xi)\,\mathrm{sech}(k_w\chi)-\epsilon\right]$
+        normal to the slope, with $k_b = 2C/b$, $k_w = 2C/w$ and
+        $C = \mathrm{acosh}(1/\epsilon)$, moving down the slope as
+        $s(t) = s_0\ln\cosh(t/t_0)$ with $s_0 = u_t^2/a_0$ and
+        $t_0 = u_t/a_0$, where $u_t$ is the terminal velocity and $a_0$ the
+        initial acceleration.
+\end{itemize}
+
+\subsection{Breaking: hydrostatic front approximation}
+\label{sec:hfa}
+
+Following \citet{smit2013}, a column starts breaking when
+$\partial\eta/\partial t > \alpha\sqrt{gD}$, with $D$ the local depth, and keeps
+breaking, or spreads to a neighbouring column, while
+$\partial\eta/\partial t > \beta\sqrt{gD}$ (defaults $\alpha=0.6$, $\beta=0.3$).
+In breaking columns the non-hydrostatic pressure is switched off, so the wave
+front travels as a hydrostatic bore and the conservative momentum equation
+with a shock-capturing (TVD) convection scheme dissipates its energy. How $q$
+is switched off is described in Section~\ref{sec:numhfa}.

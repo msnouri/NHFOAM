@@ -1,0 +1,257 @@
+\section{Numerical method}
+\label{sec:numerics}
+
+\NHFOAM\ discretises \eqref{eq:cont}--\eqref{eq:mom} with OpenFOAM's
+cell-centred finite-volume method on the moving $\sigma$-mesh, and couples
+pressure and velocity with a PIMPLE (PISO-type) algorithm \citep{issa1986}.
+What is specific to the model is where the pressure is stored, how the free
+surface enters the pressure equation, and how the time step is organised.
+
+\subsection{Pressure on the layer interfaces}
+\label{sec:interface}
+
+Two vertical arrangements of the pressure are available
+(\code{pressureLocation}). The default, \code{interface}, follows NHWAVE and
+SWASH \citep{stelling2003,zijlema2005,ma2012}: $\prgh$ is stored on the layer
+interfaces ($\sigma$-levels), Fig.~\ref{fig:interface}. There is one unknown on
+the bottom face of every cell (the bed and the internal interfaces) and one
+surface unknown per column, $p_s = g\,\eta^{n+1}$, so that $q=0$ holds exactly
+at the free surface \eqref{eq:dynamic}.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,>=Stealth]
+  % two columns, three layers, sloping bottom and surface
+  \def\xa{0}\def\xb{3.6}\def\xc{7.2}
+  \coordinate (b0) at (\xa,0.0);  \coordinate (b1) at (\xb,0.45); \coordinate (b2) at (\xc,0.9);
+  \coordinate (s0) at (\xa,4.8);  \coordinate (s1) at (\xb,5.0);  \coordinate (s2) at (\xc,4.9);
+  \foreach \k in {0,1,2,3} {
+    \draw[thick] ($(b0)!\k/3!(s0)$) -- ($(b1)!\k/3!(s1)$) -- ($(b2)!\k/3!(s2)$);
+  }
+  \draw[thick] (b0) -- (s0); \draw[thick] (b1) -- (s1); \draw[thick] (b2) -- (s2);
+  % interface CV of the middle interface of the left column (shaded)
+  \fill[blue!12] ($(b0)!0.5/3!(s0)$) -- ($(b1)!0.5/3!(s1)$) -- ($(b1)!1.5/3!(s1)$) -- ($(b0)!1.5/3!(s0)$) -- cycle;
+  \foreach \k in {0,1,2,3} {
+    \draw[thick] ($(b0)!\k/3!(s0)$) -- ($(b1)!\k/3!(s1)$);
+  }
+  % interface unknowns (circles) at face centres of layer faces, surface unknowns (squares)
+  \foreach \k in {0,1,2} {
+    \fill[blue!70!black] ($($(b0)!\k/3!(s0)$)!0.5!($(b1)!\k/3!(s1)$)$) circle (2.6pt);
+    \fill[blue!70!black] ($($(b1)!\k/3!(s1)$)!0.5!($(b2)!\k/3!(s2)$)$) circle (2.6pt);
+  }
+  \fill[red!70!black] ($($(s0)!0.5!(s1)$)+(-0.09,-0.09)$) rectangle +(0.18,0.18);
+  \fill[red!70!black] ($($(s1)!0.5!(s2)$)+(-0.09,-0.09)$) rectangle +(0.18,0.18);
+  % cell centres (crosses) of the left column
+  \foreach \k in {0.5,1.5,2.5} {
+    \node at ($($(b0)!\k/3!(s0)$)!0.5!($(b1)!\k/3!(s1)$)$) {$\times$};
+  }
+  % side flux, split half/half
+  \draw[->,thick,orange!80!black] ($($(b1)!1.0/3!(s1)$)!0.5!($(b1)!2.0/3!(s1)$)+(-0.45,0)$) -- +(0.9,0)
+     node[pos=0.8,above,font=\footnotesize,text=orange!80!black]{$\phi_{f}$};
+  % mid-plane vertical flux
+  \draw[->,thick,green!50!black] ($($(b0)!1.5/3!(s0)$)!0.5!($(b1)!1.5/3!(s1)$)+(0,-0.42)$) -- +(0,0.84);
+  \node[font=\footnotesize,green!40!black,anchor=west] at ($($(b0)!1.5/3!(s0)$)!0.5!($(b1)!1.5/3!(s1)$)+(0.08,0.32)$) {$F_{\mathrm{mid}}$};
+  % labels
+  \node[font=\footnotesize,anchor=east] at ($(s0)+(-0.1,0)$) {$\eta$};
+  \node[font=\footnotesize,anchor=east] at ($(b0)+(-0.1,0)$) {$z_b$};
+  \node[font=\footnotesize,anchor=west,align=left] at (7.6,4.6)
+     {\textcolor{red!70!black}{$\blacksquare$} surface unknown $p_s=g\eta^{n+1}$};
+  \node[font=\footnotesize,anchor=west,align=left] at (7.6,4.0)
+     {\textcolor{blue!70!black}{$\bullet$} interface unknown (bottom face\\ \quad of each cell)};
+  \node[font=\footnotesize,anchor=west,align=left] at (7.6,3.15)
+     {$\times$ cell centre: mean of its\\ \quad two interfaces};
+  \node[font=\footnotesize,anchor=west,align=left] at (7.6,2.3)
+     {\colorbox{blue!12}{\phantom{x}} interface control volume};
+\end{tikzpicture}
+\caption{Pressure on the layer interfaces: two columns of three layers. Each
+interface carries one unknown; the shaded volume, half a cell below and half a
+cell above an interface, is where continuity is imposed. A side flux $\phi_f$
+is shared equally by the interfaces below and above it, and the flux
+$F_{\mathrm{mid}}$ through the sloping mid-plane of a cell connects its two
+interfaces.}
+\label{fig:interface}
+\end{figure}
+
+\paragraph{Gradient.} Inside a cell, the vertical gradient is compact,
+$(p_{\mathrm{top}}-p_{\mathrm{bot}})/\Delta z$. The value at the cell centre is
+the mean of the two interfaces, and the horizontal gradient is the mean of the
+two interface gradients, as in NHWAVE. In practice the momentum equation takes
+the Gauss gradient with the interface values on the layer faces and the
+interpolated centre values on the side faces.
+
+\paragraph{Continuity.} Continuity is imposed on interface-centred control
+volumes, half a cell below and half a cell above each interface, as in
+NHWAVE's Poisson equation. With $\bm{H}/a_P$ the velocity predicted without the
+pressure gradient and $r_A = 1/a_P$ the inverse of the momentum diagonal, the
+flux through a side face $f$ between cells $P$ and $N$ is
+\begin{equation}
+  \phi_f = \phi^{*}_f - (r_A)_f\,|\bm{S}_f|\,\delta_f\left(\bar p_N - \bar p_P\right),
+  \qquad \bar p = \tfrac12\left(p_{\mathrm{bot}} + p_{\mathrm{top}}\right),
+  \label{eq:sideflux}
+\end{equation}
+so it couples the four interfaces of its two cells. Half of $\phi_f$ goes to
+the control volume of the interface below and half to the one above. The flux
+through the sloping mid-plane of cell $P$, of area vector
+$\bm{S}_{\mathrm{mid}} = (S_x,S_y,A)$ with $A$ the horizontal area of the
+column, connects the cell's two interfaces. It is split as OpenFOAM's
+over-relaxed non-orthogonal Laplacian \citep{jasak1996}:
+\begin{equation}
+  F_{\mathrm{mid}} = \frac{\bm{H}}{a_P}\cdot\bm{S}_{\mathrm{mid}}
+  - r_A\,\frac{A^2 + |\bm{S}_h|^2}{V}\,(p_{\mathrm{top}} - p_{\mathrm{bot}})
+  - r_A\left[S_x\frac{\partial p}{\partial x} + S_y\frac{\partial p}{\partial y}
+  - \frac{|\bm{S}_h|^2}{A}\frac{\partial p}{\partial z}\right]^{\mathrm{lagged}},
+  \label{eq:midflux}
+\end{equation}
+where $|\bm{S}_h|^2 = S_x^2+S_y^2$ and $V$ is the cell volume. The implicit
+coefficient carries the full $|\bm{S}_{\mathrm{mid}}|^2 = A^2 + |\bm{S}_h|^2$,
+so the lagged bracket holds no vertical pressure difference, and the iteration
+over the lagged terms converges however steep the layers are. With $A^2$ alone,
+the pressure correctors diverged under the bore fronts of the breaking case
+(Section~\ref{sec:breaking}).
+
+\paragraph{Free surface.}
+\label{sec:freesurface}
+The control volume of the surface unknown is the upper half of the top cell.
+Its outflow is the absolute flux through the surface face,
+$\phi_s = A_h\,\partial\eta/\partial t$, discretised as
+$A_h(\eta^{n+1}-\hat\eta)/a$ (Section~\ref{sec:time}). With
+$\eta^{n+1}=p_s/g$ and the relaxation zones \eqref{eq:relax}, the equation of the
+surface unknown of each column is
+\begin{equation}
+  \frac{A_h}{a}\left[(1 + a\sigma_r)\frac{p_s}{g} - \hat\eta - a\sigma_r\eta_t\right]
+  = \tfrac12\sum_{\text{sides of the top cell}}\phi_f + F_{\mathrm{mid}} .
+  \label{eq:surface}
+\end{equation}
+Each pressure solve therefore delivers $q$ and $\eta^{n+1}$ together. There is
+no gravity-wave Courant limit, the matrix stays symmetric, and no pressure
+reference is needed. After the solve, the side fluxes follow from
+\eqref{eq:sideflux}, the fluxes through the layer faces are integrated upward
+from the bed so that every cell conserves volume exactly, and
+$\eta^{n+1}$ follows from the flux through the surface. In closed basins the
+water volume is conserved to round-off.
+
+\paragraph{Matrix and preconditioner.} The matrix of the interface unknowns is
+symmetric positive definite, but it is not diagonally dominant where the
+layers are thicker than the horizontal spacing, and incomplete Cholesky (DIC)
+can then break down. \NHFOAM\ solves it with preconditioned conjugate gradients
+and its own \code{sigmaColumn} preconditioner, which solves the tridiagonal
+block of every column exactly (line relaxation in the vertical). It handles
+thin layers and the strong vertical coupling of breaking columns, and falls
+back to DIC (DILU for asymmetric matrices) on ordinary OpenFOAM matrices, so a
+case can name it in either layout. Three kinds of terms would need more
+couplings; they are lagged and updated in every non-orthogonal corrector:
+\begin{enumerate}[nosep]
+  \item the non-orthogonal correction of the side faces;
+  \item the along-layer part of the mid-plane flux, the bracket in
+        \eqref{eq:midflux};
+  \item on processor boundaries, the couplings to the cell above the remote
+        cell. The face is written in a compact form that bounds the exact one,
+        and the difference is lagged.
+\end{enumerate}
+
+\subsection{Cell-centred pressure}
+\label{sec:cellp}
+
+With \code{pressureLocation cell}, $\prgh$ is OpenFOAM's usual cell-centred
+field, and the kinematic and dynamic conditions combine into a Robin condition
+on the surface patch, implemented through OpenFOAM's \code{mixed} patch field:
+\begin{equation}
+  p_s = f\,p_{\mathrm{ref}} + (1-f)\,p_c,\quad
+  p_{\mathrm{ref}} = \frac{g\left(\hat\eta + a\sigma_r\eta_t + a\,\phi^{*}_s/A_h\right)}{1 + a\sigma_r},\quad
+  f = \frac{1 + a\sigma_r}{1 + a\sigma_r + \beta_s},
+  \label{eq:robin}
+\end{equation}
+with $\beta_s = g\,a\,(r_A)_f\,|\bm{S}_f|\,\delta_f/A_h$ and $p_c$ the value in the
+top cell. This layout needs many more layers for the same dispersion
+(Section~\ref{sec:dispersion}) and is kept for reference.
+
+\subsection{Breaking columns}
+\label{sec:numhfa}
+
+In breaking columns the vertical coupling of the pressure is multiplied by a
+large factor (\code{hydrostaticFactor}, default 1000). In the interface layout
+this is the coefficient of $p_{\mathrm{top}}-p_{\mathrm{bot}}$ in
+\eqref{eq:midflux}, up to the surface unknown; in the cell layout it is an
+extra coupling across the layer faces plus a large mobility of the surface
+face. $\prgh$ then becomes uniform in the vertical ($q=0$, since the surface
+value is $g\eta$), and the fluxes through the layer faces follow from
+continuity. The factor acts on the vertical pressure difference only: scaling
+the face mobility itself would also scale the non-orthogonal correction on the
+sloping layer faces, i.e.\ the horizontal pressure gradient under a steep
+front, which drives spurious vertical fluxes.
+
+\subsection{Time integration}
+\label{sec:time}
+
+Time integration follows the \code{ddt(U)} scheme: Euler, or the second-order
+backward differentiation formula (BDF2) with variable time-step coefficients
+for both $\bm{u}$ and $\eta$. With $r = \Delta t/\Delta t_0$, where $\Delta t_0$ is
+the previous step,
+\begin{equation}
+  \begin{aligned}
+  \left.\frac{\partial\eta}{\partial t}\right|^{n+1} &\approx \frac{\eta^{n+1}-\hat\eta}{a},\qquad
+  a = \frac{\Delta t}{c},\qquad
+  \hat\eta = \frac{c_0\,\eta^{n} - c_{00}\,\eta^{n-1}}{c},\\
+  c &= 1 + \frac{r}{1+r},\qquad
+  c_{00} = \frac{r^2}{1+r},\qquad
+  c_0 = c + c_{00}.
+  \end{aligned}
+  \label{eq:bdf2}
+\end{equation}
+The first step after the start (or a restart) is Euler. OpenFOAM's Rhie--Chow
+type time-derivative flux correction (\code{ddtCorr}) is used with its
+coefficient set to one (\code{backward 1} in \code{ddtSchemes}); with the
+default limiter, standing waves lost 3.9\% of their amplitude over 4.5
+periods instead of 0.09\%.
+
+\paragraph{Algorithm per time step.}
+\begin{enumerate}[nosep]
+  \item Shift the time levels of $\eta$ and of the face velocity $\bm{u}_f$; set the
+        targets of the relaxation zones and the breaking flags.
+  \item Move the mesh to the extrapolated surface
+        $\eta^{*} = \eta^n + r\,(\eta^n - \eta^{n-1})$.
+  \item Rebuild the flux on the moved faces from the face velocity and make
+        it relative to the mesh motion. In the first outer corrector the face
+        velocity is extrapolated (\code{fluxExtrapolation}, default on with
+        BDF2):
+        \begin{equation}
+          \phi^{*} = \bm{S}_f\cdot\left[(1+r)\,\bm{u}_f^{n} - r\,\bm{u}_f^{n-1}\right] - \phi_{\mathrm{mesh}} .
+          \label{eq:fluxext}
+        \end{equation}
+  \item Momentum predictor, with the pressure gradient of the last corrector.
+  \item Pressure correctors (\code{nCorrectors}, 2--3). Each one assembles and
+        solves the interface matrix with the surface rows \eqref{eq:surface}
+        (or, in the cell layout, sets the Robin coefficients \eqref{eq:robin}
+        and solves for $\prgh$), with \code{nNonOrthogonalCorrectors} updates
+        of the lagged terms, then updates the flux, $\eta^{n+1}$, $\bm{u}$ and
+        $\bm{u}_f$.
+  \item Optional further outer correctors repeat steps 3--5 with the latest
+        flux (and, with \code{moveMeshOuterCorrectors}, the latest $\eta$).
+\end{enumerate}
+
+\paragraph{Order of accuracy in time.} With one outer corrector, the momentum
+equation of step $n+1$ is linearised with a convecting flux of level $n$. That
+lag is an error of order $\Delta t$ in every step, so the scheme is only first
+order in time for nonlinear waves, although BDF2 is second order. In the
+solitary wave of Section~\ref{sec:ma-solitary}, halving the time step halved
+the error. The extrapolation \eqref{eq:fluxext} removes the lag at no cost.
+Before it was introduced, a second outer corrector gave the same accuracy at
+1.6 times the cost (Section~\ref{sec:ma-solitary}).
+
+\subsection{Convection}
+\label{sec:convection}
+
+The convection term uses OpenFOAM's schemes. Three are used in this report:
+\begin{itemize}[nosep]
+  \item \code{Gauss limitedLinearV 1}, a TVD scheme. It is needed in breaking
+        cases, where bores form, and it was the default until this report;
+  \item \code{Gauss filteredLinear2V 0.2 0}, central differencing with a filter
+        that only acts on grid-scale oscillations. It damps waves as little as
+        central differencing but stayed stable in long nonlinear runs
+        (Section~\ref{sec:ma}); it is the recommended scheme for non-breaking
+        waves;
+  \item \code{Gauss linear}, pure central differencing. It damps least, but
+        grid-scale noise grows in long nonlinear runs and behind bores.
+\end{itemize}
+Upwind-biased schemes (\code{linearUpwind}, \code{LUST}) damp waves of moderate
+steepness noticeably (Section~\ref{sec:convtests}).

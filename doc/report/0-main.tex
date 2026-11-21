@@ -1,0 +1,67 @@
+\documentclass[12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,decorations.pathreplacing,calc}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{enumitem}
+\usepackage{authblk}
+\usepackage{lineno}
+\usepackage{abstract}
+\usepackage[round,authoryear]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+\usepackage{microtype}
+\usepackage[section]{placeins}
+
+\graphicspath{{../figures/}}
+
+% notes to self
+\newcommand{\anote}[1]{\textcolor{red}{[#1]}}
+
+% notation
+\newcommand{\prgh}{p_{\mathrm{rgh}}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\NHFOAM}{NHFOAM}
+
+\setlength{\parskip}{0.4em}
+
+\title{NHFOAM: a non-hydrostatic $\sigma$-layer wave model in OpenFOAM\\[0.4em]
+\large Model description, verification, and validation against NHWAVE}
+
+\author[1]{Mohammadsadegh Nouri\thanks{Corresponding author: \href{mailto:msnouri@udel.edu}{msnouri@udel.edu}}}
+\affil[1]{Center for Applied Coastal Research, Department of Civil, Construction, and Environmental Engineering, University of Delaware, Newark, DE 19716, USA}
+\date{Technical report, November 2026\\ \small Code: \url{https://github.com/msnouri/NHFOAM}}
+
+\begin{document}
+\maketitle
+% \linenumbers
+
+\input{1-1-Abstract}
+\clearpage
+\tableofcontents
+\clearpage
+
+\input{1-Introduction}
+\input{2-Model_Formulation}
+\input{3-Numerical_Method}
+\input{4-Verification}
+\input{5-Validation_NHWAVE}
+\input{6-Conclusions}
+
+\bibliographystyle{apalike}
+\bibliography{7-References}
+
+\appendix
+\input{8-Appendix}
+
+\end{document}

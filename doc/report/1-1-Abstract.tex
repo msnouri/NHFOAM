@@ -1,0 +1,35 @@
+\begin{abstract}
+\NHFOAM\ is a non-hydrostatic, free-surface wave model for OpenFOAM in the
+spirit of NHWAVE and SWASH. It solves the incompressible Navier--Stokes
+equations on surface- and terrain-following ($\sigma$) meshes that move with the
+free surface and can be unstructured in the horizontal. As in NHWAVE, the
+pressure is stored on the layer interfaces, with one surface unknown per
+column that carries the free surface implicitly; the resulting matrix is
+solved with conjugate gradients and a column (line) preconditioner. The model
+has relaxation zones for wave generation and absorption, prescribed seabed
+motion and depth-induced breaking with the hydrostatic front approximation.
+This report documents the equations and the numerical method, and collects
+the verification and validation to date. Run on the same set-ups as NHWAVE,
+\NHFOAM\ resolves dispersion to $kh = 7$ with two layers (period error below
+0.6\%), and over a submerged bar and for a 3D landslide it matches the
+measurements as well as NHWAVE and REEF3D::NHFLOW. The tests of
+\citet{ma2012} were then repeated against NHWAVE from the simplest upwards,
+and they exposed two weaknesses that are now fixed. The convection term was
+linearised with the flux of the previous time level, which made the time
+integration first order for nonlinear waves: a solitary wave of $H/h = 0.5$
+lost 6.4\% of its height in 150 m. Extrapolating the convecting flux restores
+second order at no cost and brings the loss to 1.0\%, against 2.3\% for NHWAVE.
+And the TVD convection scheme damped short standing waves; with filtered
+central differencing the standing-wave error is 0.07--0.56\%, against
+0.6--4.8\% for NHWAVE. On the 3D elliptic shoal of \citet{berkhoff1982},
+\NHFOAM\ reproduces the measured focusing on a grid four times coarser than
+the paper's, with errors at the first sections close to those of NHWAVE on
+the paper's grid, while NHWAVE on the coarse grid loses 30\% of the incident
+wave height. The main limitations are the lack of wetting and drying,
+the too weak dissipation of hydrostatic bores in the surf zone, and linear wave
+generation.
+
+\vspace{0.5em}
+\noindent\textbf{Keywords:} non-hydrostatic model; $\sigma$-coordinate;
+OpenFOAM; NHWAVE; wave dispersion; model validation
+\end{abstract}

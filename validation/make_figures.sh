@@ -15,7 +15,7 @@ RUNS_CELL=${RUNS_CELL:-/home/claude/runs}
 CMP=${CMP:-/home/claude/runs_cmp}
 MA=${MA:-/home/claude/runs_ma}
 LAB=${LAB:-/home/claude/ext/BENCHMARK_FUNWAVE}
-NHW=${NHW:-/home/claude/ext/NHWAVE}
+NHW=${NHW:-/home/claude/ext/nhw_forks/NHWAVE_NHWAVE}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -66,6 +66,16 @@ python3 plot_hansen_svendsen.py $LAB/car_hansen_svendsen/postprocessing/ht_setup
     reef3d:$CMP/r3_hs:"REEF3D::NHFLOW"
 
 # Ma et al. (2012) tests against NHWAVE
-python3 plot_ma2012_basin.py $MA/basin $OUT/ma2012_basin.png
-python3 plot_ma2012_solitary.py $MA/solitary/nf_sol_outer2 $MA/solitary/nw_sol \
-    $OUT/ma2012_solitary.png 3
+python3 plot_ma2012_basin.py $MA/basin $OUT/ma2012_basin.png nfe
+python3 plot_ma2012_solitary.py --old $MA/solitary/nf_sol $MA/solitary/nf_sol_ext_flt \
+    $MA/solitary/nw_sol $OUT/ma2012_solitary.png 3
+python3 plot_bar.py --tend 40 --title 'Submerged bar, case A ($H = 2$ cm, $T = 2.02$ s), 3 layers' \
+    $LAB/car_luth_AC/lab_data/CaseA $OUT/ma2012_bar.png \
+    $MA/bar/nf_bar_L3_ext_flt:NHFOAM nhwave:$MA/bar/nw_bar_L3:NHWAVE \
+    $MA/bar/nf_bar_L3:"NHFOAM, first order in time"
+python3 plot_enet_grilli.py $NHW/examples/landslide_benchmarks/BM2_enet_grilli/d61 \
+    $OUT/ma2012_landslide.png \
+    $MA/landslide/nf_eg_ext_flt:NHFOAM nhwave:$CMP/nw_eg:NHWAVE \
+    $RUNS_IF/ieg_llv2:"NHFOAM before the fixes"
+python3 plot_ma2012_berkhoff.py $NHW/examples/berkhoff/postprocessing $OUT/ma2012_berkhoff.png \
+    $MA/berkhoff/nf_berk:"NHFOAM@32.25" nhwave:$MA/berkhoff/nw_berk:NHWAVE
