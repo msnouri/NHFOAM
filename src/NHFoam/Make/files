@@ -1,7 +1,0 @@
-sigmaColumns/sigmaColumns.C
-linearWave/linearWave.C
-forcingZones/forcingZones.C
-bottomMotion/bottomMotion.C
-derivedFvPatchFields/nhMovingSlipVelocity/nhMovingSlipVelocityFvPatchVectorField.C
-
-LIB = $(FOAM_USER_LIBBIN)/libNHFoam

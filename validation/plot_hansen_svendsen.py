@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Hansen & Svendsen (1979): wave height and mean water level across the
-shoaling and surf zones, NHFoam vs lab data.
+shoaling and surf zones, NHFOAM vs lab data.
 
 usage: plot_hansen_svendsen.py <labFile> <T> <out.png> [kind:]<case>[:label] [...]
     kind = nhfoam (default) | nhwave | reef3d   (see other_models.py)

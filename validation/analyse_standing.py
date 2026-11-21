@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Period and amplitude decay of a standing wave from NHFoam gauge output."""
+"""Period and amplitude decay of a standing wave from NHFOAM gauge output."""
 import sys, numpy as np
 
 def load(case):
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     t, e = load(case)
     e0 = e[0] if abs(e[0]) > 0 else 1
     Tzc, peaks = fit(t, e, T_lin)
-    print(f"period NHFoam = {Tzc:.5f} s, linear theory = {T_lin:.5f} s, ratio = {Tzc/T_lin:.5f}")
+    print(f"period NHFOAM = {Tzc:.5f} s, linear theory = {T_lin:.5f} s, ratio = {Tzc/T_lin:.5f}")
     if len(peaks) > 2:
         # amplitude at last full half period relative to first
         nT = (peaks[-2, 0] - peaks[0, 0]) / T_lin

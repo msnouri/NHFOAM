@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Input files for NHWAVE and REEF3D::NHFLOW on the NHFoam validation cases,
+"""Input files for NHWAVE and REEF3D::NHFLOW on the NHFOAM validation cases,
 with the same geometry, gauges and (where possible) resolution, so that their
 results can be plotted with ours.
 
@@ -20,7 +20,7 @@ BAR_GAUGES = [22, 24, 30.5, 32.5, 33.5, 34.5, 35.7, 37.3, 39.0, 41.0]
 
 
 def bar_depth(x):
-    """Luth et al. (1994) bar in the NHFoam/FUNWAVE coordinates."""
+    """Luth et al. (1994) bar in the NHFOAM/FUNWAVE coordinates."""
     xs = [0, 26, 32, 34, 37, 54]
     hs = [0.4, 0.4, 0.1, 0.1, 0.4, 0.4]
     return np.interp(x, xs, hs)
@@ -68,7 +68,7 @@ def nhwave_common(Mglob, Nglob, Kglob, dx, dy, total, px=2):
 
 def nhwave_bar(case, template, H, T, nLayers=10, dx=0.02, total=50.0, px=2):
     """Submerged bar: linear waves from the left boundary (x = 0), 8 m
-    sponge at the right end, as the NHFoam case."""
+    sponge at the right end, as the NHFOAM case."""
     M = int(round(54.0 / dx))
     x = (np.arange(M) + 0.5) * dx
     keys = nhwave_common(M, 1, nLayers, dx, dx, total, px)
@@ -114,7 +114,7 @@ def reef3d_write(case, control, ctrl):
 
 def reef3d_bar(case, H, T, nLayers=10, dx=0.02, total=50.0, nproc=2):
     """Submerged bar: 8 m relaxation zones for generation and absorption,
-    linear waves, as the NHFoam case. The bar is built from solids."""
+    linear waves, as the NHFOAM case. The bar is built from solids."""
     nx = int(round(54.0 / dx))
     control = f"""
 C 11 6
@@ -162,7 +162,7 @@ W 22 -9.81
 def reef3d_hs(case, H=0.0686, T=1.667, nLayers=10, dx=0.025, total=66.68,
               zone=8.0, flat=6.0, nproc=2, breaking=True):
     """Hansen & Svendsen spilling breakers with the full beach (NHFLOW has
-    wetting and drying). x = 0 at the toe in the NHFoam/lab coordinates;
+    wetting and drying). x = 0 at the toe in the NHFOAM/lab coordinates;
     the REEF3D domain starts at x0 = -(zone + flat)."""
     x0 = -(zone + flat)
     x1 = 13.5
@@ -220,7 +220,7 @@ W 22 -9.81
 # Readers: gauge time series as (t, {x: eta})
 
 def read_nhfoam(case, xs=None):
-    """NHFoam gauges; keys are the gauge x positions (or names if xs is
+    """NHFOAM gauges; keys are the gauge x positions (or names if xs is
     given as a list of names)."""
     fn = os.path.join(case, "postProcessing", "gauges", "0", "eta.dat")
     d = np.loadtxt(fn, comments="#")
@@ -244,7 +244,7 @@ def parse_case(arg):
 
 
 def read_any(kind, path, xs):
-    """Gauge series at positions xs (in the NHFoam coordinates) for any of
+    """Gauge series at positions xs (in the NHFOAM coordinates) for any of
     the three models. NHWAVE and REEF3D gauges are in the order of xs."""
     if kind == "nhfoam":
         t, d = read_nhfoam(path)
@@ -273,7 +273,7 @@ def read_reef3d(case, xs):
 
 def nhwave_standing(case, template, kh, nLayers, h=1.0, Nx=64, a_over_h=1e-3,
                     nPeriods=5, cfl=0.3):
-    """Standing wave in a closed basin one wavelength long, as the NHFoam
+    """Standing wave in a closed basin one wavelength long, as the NHFOAM
     dispersion study: eta = a cos(k x), U = 0 (eta0.txt, uvw0.txt)."""
     g = 9.81
     k = kh / h

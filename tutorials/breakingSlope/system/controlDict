@@ -1,6 +1,6 @@
 /*--------------------------------*- C++ -*----------------------------------*\
   =========                 |
-  \\      /  F ield         | NHFoam
+  \\      /  F ield         | NHFOAM
    \\    /   O peration     |
     \\  /    A nd           |
      \\/     M anipulation  |
@@ -15,7 +15,7 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-application     NHFoam;
+application     NHFOAM;
 
 startFrom       startTime;
 startTime       0;

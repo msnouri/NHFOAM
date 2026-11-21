@@ -1,6 +1,6 @@
 #!/bin/sh
 cd "${0%/*}" || exit 1
-wclean libso src/NHFoam
-wclean applications/solvers/NHFoam
+wclean libso src/NHFOAM
+wclean applications/solvers/NHFOAM
 wclean applications/utilities/nhSetWaves
-rm -rf src/NHFoam/lnInclude
+rm -rf src/NHFOAM/lnInclude

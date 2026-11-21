@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Submerged bar (Luth et al. 1994, cases A and C): gauges of NHFoam (and of
+"""Submerged bar (Luth et al. 1994, cases A and C): gauges of NHFOAM (and of
 NHWAVE / REEF3D::NHFLOW runs of the same set-up) vs lab data.
 
 usage: plot_bar.py [--caseC] <labDataDir> <out.png> [kind:]<case>[:label] ...

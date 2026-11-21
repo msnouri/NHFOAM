@@ -8,4 +8,4 @@ restore0Dir
 gmsh -3 basin.geo -format msh2 -o basin.msh > log.gmsh 2>&1 || { echo "gmsh failed (see log.gmsh)"; exit 1; }
 runApplication gmshToFoam basin.msh
 runApplication nhSetWaves
-runApplication NHFoam
+runApplication NHFOAM

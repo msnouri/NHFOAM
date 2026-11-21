@@ -1,6 +1,6 @@
 #!/bin/bash
 # Period error with surface-refined sigma layers (blockMesh simpleGrading in z:
-# ratio of the top to the bottom layer thickness). Needs OpenFOAM + NHFoam.
+# ratio of the top to the bottom layer thickness). Needs OpenFOAM + NHFOAM.
 here=$(dirname $(readlink -f $0))
 out=./grading.csv
 echo "kh,layers,grading,T_lin,T_nh,ratio,amp_ratio" > $out
@@ -13,9 +13,9 @@ import make_case
 r = make_case.standing_case('$name', $kh, $nl, Nx=64, stepsPerPeriod=200, nPeriods=5, zgrade=$gr)
 open('$name/T_lin','w').write(repr(r['T']))
 PY
-  (cd $name && blockMesh > log.blockMesh 2>&1 && nhSetWaves > log.nhSetWaves 2>&1 && NHFoam > log.NHFoam 2>&1)
+  (cd $name && blockMesh > log.blockMesh 2>&1 && nhSetWaves > log.nhSetWaves 2>&1 && NHFOAM > log.NHFOAM 2>&1)
   res=$(python3 $here/analyse_standing.py $name $(cat $name/T_lin))
-  Tn=$(echo "$res" | sed -n 's/.*period NHFoam = \([0-9.]*\).*/\1/p'); Tl=$(cat $name/T_lin)
+  Tn=$(echo "$res" | sed -n 's/.*period NHFOAM = \([0-9.]*\).*/\1/p'); Tl=$(cat $name/T_lin)
   rat=$(echo "$res" | sed -n 's/.*ratio = \([0-9.]*\)$/\1/p' | head -1)
   amp=$(echo "$res" | sed -n 's/.*periods: \([0-9.]*\)/\1/p')
   echo "$kh,$nl,$gr,$Tl,$Tn,$rat,$amp" >> $out

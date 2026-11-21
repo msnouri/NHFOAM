@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bottom uplift (Hammack 1973 type): NHFoam gauges vs linear potential theory.
+"""Bottom uplift (Hammack 1973 type): NHFOAM gauges vs linear potential theory.
 
 Bottom: zeta(x, t) = zeta0 (1 - exp(-alpha t)) for |x| < b, alpha = 1.11/tc.
 Linear theory (constant depth h):
@@ -51,13 +51,13 @@ for i, ax in zip(sel, axes):
     x = gx[i]
     xc = (math.floor(x / dx) + 0.5) * dx
     el = eta_lin(xc, tt)
-    ax.plot(t, d[:, i + 1] / z0, color="#1f5fa8", lw=1.4, label="NHFoam, 5 layers")
+    ax.plot(t, d[:, i + 1] / z0, color="#1f5fa8", lw=1.4, label="NHFOAM, 5 layers")
     ax.plot(tt, el / z0, "k--", lw=1.0, label="linear potential theory")
     ax.set_ylabel(r"$\eta/\zeta_0$")
     ax.text(0.99, 0.82, rf"$x/b = {x / b:.0f}$", transform=ax.transAxes, ha="right")
     ax.grid(alpha=0.3)
     err = np.max(np.abs(np.interp(tt, t, d[:, i + 1]) - el)) / z0
-    print(f"x/b = {x/b:4.1f}: max |eta - eta_lin| / zeta0 = {err:.4f}, peak NHFoam {d[:, i+1].max()/z0:.4f}, linear {el.max()/z0:.4f}")
+    print(f"x/b = {x/b:4.1f}: max |eta - eta_lin| / zeta0 = {err:.4f}, peak NHFOAM {d[:, i+1].max()/z0:.4f}, linear {el.max()/z0:.4f}")
 axes[0].legend(loc="lower right", ncol=2)
 axes[-1].set_xlabel(r"$t$ [s]")
 fig.suptitle(rf"Bottom uplift: $h = {h:g}$ m, $b = {b:g}$ m, $\zeta_0/h = {z0 / h:g}$, $t_c = {tc:g}$ s")

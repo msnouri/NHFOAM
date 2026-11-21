@@ -1,0 +1,72 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFOAM
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      NHFOAMProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// NTHMP landslide benchmark 2: 3D rigid slide of Enet & Grilli (2007),
+// initial submergence d = 61 mm. A quasi-Gaussian solid (b = 0.395 m,
+// w = 0.68 m, T = 0.082 m) slides down a 15 deg slope with
+// s(t) = s0 ln cosh(t/t0), ut = 1.70 m/s, a0 = 1.12 m/s^2.
+// x is measured from the still-water shoreline. Half tank (y >= 0, the
+// 'axis' wall is the symmetry plane). There is no wetting and drying, so the
+// domain starts at x = 0.2 m with a wall. Gauges g1-g4 as in the experiments;
+// validation/plot_enet_grilli.py compares them with the lab records.
+// This tutorial mesh is coarse (dx = 0.05 m, 5 surface-refined layers); the
+// validation figure in the README uses dx = 0.025 m.
+
+// Free-surface (top) and bottom patches of the sigma mesh
+surfacePatch    surface;
+bottomPatch     bottom;
+
+// Smallest water depth used to place the mesh points [m]
+minDepth        1e-4;
+
+stillWaterLevel 0;
+
+gauges
+{
+    g1    (0.551 0 0);
+    g2    (1.469 0.35 0);
+    g3    (1.929 0 0);
+    g4    (1.919 0.5 0);
+}
+
+bottomMotion
+{
+    type        slide;
+    centre      (0.551 0 0);
+    direction   (1 0 0);
+    slopeAngle  15;
+    thickness   0.082;
+    length      0.395;
+    width       0.680;
+    epsilon     0.717;
+    terminalVelocity     1.7;
+    initialAcceleration  1.12;
+}
+
+forcingZones
+{
+    outlet
+    {
+        type        sponge;
+        start       (7 0 0);
+        end         (10 0 0);
+        sigmaMax    5;
+        exponent    2;
+    }
+}
+
+// ************************************************************************* //

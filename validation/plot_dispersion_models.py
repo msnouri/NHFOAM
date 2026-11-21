@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standing-wave period error and damping vs kh: NHFoam and NHWAVE with the
+"""Standing-wave period error and damping vs kh: NHFOAM and NHWAVE with the
 same basin, resolution (64 cells per wavelength, T/dt = 200) and number of
 uniform layers.
 
@@ -41,7 +41,7 @@ for nl, col in cols.items():
     m = nf["layers"] == nl
     o = np.argsort(nf["kh"][m])
     axes[0].plot(nf["kh"][m][o], 100 * (nf["ratio"][m][o] - 1), "o-", color=col, ms=4,
-                 label=f"NHFoam, {nl} layers")
+                 label=f"NHFOAM, {nl} layers")
     axes[1].plot(nf["kh"][m][o], 100 * (1 - nf["amp_ratio"][m][o]), "o-", color=col, ms=4)
     k = [kh for kh in khs if (kh, nl) in nw]
     axes[0].plot(k, [100 * (nw[(kh, nl)][0] - 1) for kh in k], "s--", color=col, ms=4,

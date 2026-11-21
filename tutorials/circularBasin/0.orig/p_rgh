@@ -1,6 +1,6 @@
 /*--------------------------------*- C++ -*----------------------------------*\
   =========                 |
-  \\      /  F ield         | NHFoam
+  \\      /  F ield         | NHFOAM
    \\    /   O peration     |
     \\  /    A nd           |
      \\/     M anipulation  |
@@ -21,7 +21,7 @@ internalField   uniform 0;
 
 boundaryField
 {
-    // Free surface: coefficients are set by NHFoam every corrector
+    // Free surface: coefficients are set by NHFOAM every corrector
     surface
     {
         type            mixed;

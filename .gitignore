@@ -1,5 +1,5 @@
 # wmake build output
-Make/*/
+**/Make/*/
 lnInclude/
 
 # Tutorial run output (fields are restored from 0.orig by Allrun)

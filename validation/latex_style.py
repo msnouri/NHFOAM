@@ -1,4 +1,4 @@
-"""Matplotlib style for the NHFoam figures: all text typeset by LaTeX
+"""Matplotlib style for the NHFOAM figures: all text typeset by LaTeX
 (Computer Modern), so the figures match a LaTeX paper.
 
 Needs latex, dvipng and the cm-super fonts (Ubuntu: texlive-latex-extra,

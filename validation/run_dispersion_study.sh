@@ -1,5 +1,5 @@
 #!/bin/bash
-# requires the OpenFOAM environment and the NHFoam executables
+# requires the OpenFOAM environment and the NHFOAM executables
 out=./dispersion.csv
 echo "kh,layers,T_lin,T_nh,ratio,amp_ratio" > $out
 run_one() {
@@ -11,9 +11,9 @@ import make_case
 r = make_case.standing_case('$name', $kh, $nl, Nx=64, stepsPerPeriod=200, nPeriods=5)
 open('$name/T_lin','w').write(repr(r['T']))
 PY
-  (cd $name && blockMesh > log.blockMesh 2>&1 && nhSetWaves > log.nhSetWaves 2>&1 && NHFoam > log.NHFoam 2>&1)
+  (cd $name && blockMesh > log.blockMesh 2>&1 && nhSetWaves > log.nhSetWaves 2>&1 && NHFOAM > log.NHFOAM 2>&1)
   res=$(python3 $(dirname $(readlink -f $0))/analyse_standing.py $name $(cat $name/T_lin))
-  Tn=$(echo "$res" | sed -n 's/.*period NHFoam = \([0-9.]*\).*/\1/p'); Tl=$(cat $name/T_lin)
+  Tn=$(echo "$res" | sed -n 's/.*period NHFOAM = \([0-9.]*\).*/\1/p'); Tl=$(cat $name/T_lin)
   rat=$(echo "$res" | sed -n 's/.*ratio = \([0-9.]*\)$/\1/p' | head -1)
   amp=$(echo "$res" | sed -n 's/.*periods: \([0-9.]*\)/\1/p')
   echo "$kh,$nl,$Tl,$Tn,$rat,$amp" >> $out

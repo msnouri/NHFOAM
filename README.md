@@ -1,10 +1,10 @@
-# NHFoam
+# NHFOAM
 
 **A non-hydrostatic, free-surface wave model for OpenFOAM**, in the spirit of
 NHWAVE and SWASH, on surface- and terrain-following (σ) meshes that can be
 **unstructured in the horizontal**.
 
-NHFoam solves the incompressible Navier–Stokes equations for water only. The
+NHFOAM solves the incompressible Navier–Stokes equations for water only. The
 free surface z = η(x, y, t) is the top boundary of a σ-mesh that moves with it.
 Because it lives inside OpenFOAM, the horizontal mesh can be any 2D mesh
 (quads, triangles, polygons) extruded into vertical columns. It also uses
@@ -130,8 +130,8 @@ This builds:
 
 | target | what |
 |---|---|
-| `libNHFoam` | σ-column structure, mesh motion, linear wave theory, relaxation zones, seabed motion, the `nhMovingSlipVelocity` condition |
-| `NHFoam` | the solver |
+| `libNHFOAM` | σ-column structure, mesh motion, linear wave theory, relaxation zones, seabed motion, the `nhMovingSlipVelocity` condition |
+| `NHFOAM` | the solver |
 | `nhSetWaves` | initial conditions: `standing`, `solitary`, `linear`, `circularMode` |
 
 *Compatibility.* The code was compiled and run with OpenFOAM v1912. Every API
@@ -165,12 +165,12 @@ layer a quarter to half the bottom one) cuts the period error at kh = 5 from
 | field | `surface` | `bottom` / walls | notes |
 |---|---|---|---|
 | `U` | `zeroGradient` | `slip` or `noSlip` | |
-| `p_rgh` | **`mixed`** | `fixedFluxPressure` | the mixed coefficients are overwritten by NHFoam |
+| `p_rgh` | **`mixed`** | `fixedFluxPressure` | the mixed coefficients are overwritten by NHFOAM |
 | `eta` | `zeroGradient` | `zeroGradient` | free-surface elevation; one value per column (all cells of a column carry it) |
 
 Outputs: `eta`, `q` (non-hydrostatic pressure), `p` (total p/ρ), `p_rgh`, `U`.
 
-**`constant/NHFoamProperties`:**
+**`constant/NHFOAMProperties`:**
 
 ```c++
 surfacePatch    surface;     // top patch (default: surface)
@@ -222,7 +222,7 @@ breaking                     // hydrostatic front approximation
 
 bottomMotion                 // prescribed seabed motion
 {
-    type        uplift;      // or slide (see src/NHFoam/bottomMotion)
+    type        uplift;      // or slide (see src/NHFOAM/bottomMotion)
     min         (-0.305 -1 0);
     max         ( 0.305  1 0);
     amplitude   0.0005;      // [m], + up
@@ -246,7 +246,7 @@ bottomMotion                 // rigid slide on a plane slope
 ```
 
 With a moving bottom, use `nhMovingSlipVelocity` for U on the bottom patch,
-and add `libs ("libNHFoam.so");` to `system/controlDict` so that utilities
+and add `libs ("libNHFOAM.so");` to `system/controlDict` so that utilities
 such as `decomposePar` know that condition.
 
 You also need `constant/g` (along −z), `transportProperties` and
@@ -264,7 +264,7 @@ divSchemes
 
 Without the ddt coefficient, OpenFOAM limits its Rhie–Chow ddt correction
 and waves are visibly damped. In our standing-wave test, amplitude loss went
-from 3.9% to 0.09% over 4.5 periods once the coefficient was set. NHFoam
+from 3.9% to 0.09% over 4.5 periods once the coefficient was set. NHFOAM
 prints a warning if it is missing. Euler works, but it is far too
 dissipative for wave propagation. Upwind-biased convection (`linearUpwind`,
 `LUST`) damps progressive waves of moderate steepness. Central
@@ -286,7 +286,7 @@ harmonics there have periods of T/2 and T/3 (see 5.4).
 | `ddtCorr` | `true` (default) |
 
 **Initial conditions.** Set them with `nhSetWaves` (`system/nhSetWavesDict`).
-NHFoam moves the mesh onto the initial η at start-up.
+NHFOAM moves the mesh onto the initial η at start-up.
 
 **Parallel.** Whole columns must stay on one processor, so use the
 `structured` decomposition method on the bottom patch:
@@ -328,7 +328,7 @@ non-hydrostatic σ-layer models, on the same set-up: the same domain, bottom,
 gauges, horizontal spacing and number of layers. Each model keeps its own
 numerics and its usual wave input.
 
-| | NHFoam | NHWAVE | REEF3D::NHFLOW |
+| | NHFOAM | NHWAVE | REEF3D::NHFLOW |
 |---|---|---|---|
 | version | this repository | `JimKirby/NHWAVE` master (1483007), MPI + HYPRE 3.2 | 26.08 (conda-forge build) |
 | vertical pressure | cell centres | layer interfaces (σ-levels) | as distributed |
@@ -339,8 +339,8 @@ numerics and its usual wave input.
 
 `validation/other_models.py` writes their input files and reads their gauge
 output, and the plotting scripts accept `nhwave:<dir>` and `reef3d:<dir>`
-next to NHFoam cases. REEF3D::NHFLOW has no slide model, so the landslide
-runs are NHFoam and NHWAVE only. SWASH could not be included: its only
+next to NHFOAM cases. REEF3D::NHFLOW has no slide model, so the landslide
+runs are NHFOAM and NHWAVE only. SWASH could not be included: its only
 download site was not reachable from the build machine.
 
 ### 5.1 Basic checks
@@ -392,13 +392,13 @@ layers. `validation/run_grading_study.sh` reproduces the table.
 
 **Against NHWAVE** (same basins, 64 cells per wavelength, T/Δt = 200,
 uniform layers). NHWAVE keeps the period error within 0.5% for kh ≤ 7 with 3
-layers (0.13% with 2 layers at kh = 5). For 0.5%, NHFoam needs 5 layers at
+layers (0.13% with 2 layers at kh = 5). For 0.5%, NHFOAM needs 5 layers at
 kh = 1 and 20 at kh = 3–5. The difference is the vertical arrangement:
 NHWAVE solves for the pressure on the layer interfaces, with p = 0 exactly
-at the surface, the layout of SWASH's Keller box. NHFoam's pressure is
+at the surface, the layout of SWASH's Keller box. NHFOAM's pressure is
 cell-centred. NHWAVE damps more: after 4.5 periods it has lost 0.6–12% of
 the amplitude with 3 layers and 0.6–3.5% with 10, against 0.1–3.6% and
-0.1–1.9% for NHFoam. An interface pressure arrangement is the main item on
+0.1–1.9% for NHFOAM. An interface pressure arrangement is the main item on
 the roadmap.
 
 ### 5.3 Convection and the decay of progressive waves
@@ -424,13 +424,13 @@ from the BDF2 time step.
 ![bar](doc/figures/bar_models_A.png)
 ![barC](doc/figures/bar_models_C.png)
 
-All three models: Δx = 2 cm and 10 uniform layers. NHFoam runs 65 s with
+All three models: Δx = 2 cm and 10 uniform layers. NHFOAM runs 65 s with
 `limitedLinearV` and Δt = 5 ms; NHWAVE and REEF3D::NHFLOW run 50 s, by which
 time their records behind the bar are steady. The comparison window is the
 end of each run, and one time shift, fitted at x = 22 m, is applied to all
 gauges of a run. ΔH is the error of max − min over the lab record.
 
-| | NHFoam | NHWAVE | REEF3D::NHFLOW |
+| | NHFOAM | NHWAVE | REEF3D::NHFLOW |
 |---|---|---|---|
 | case A, rms over the 10 gauges | 0.27 cm | 0.29 cm | 0.23 cm |
 | case A, mean \|ΔH\|/H | 9.0% | 4.7% | 6.3% |
@@ -438,14 +438,14 @@ gauges of a run. ΔH is the error of max − min over the lab record.
 | case C, mean \|ΔH\|/H | 14.3% | 6.1% | 5.1% |
 
 Up to x = 34.5 m in case A, all three models are within 0.06–0.46 cm rms of
-the measurements. NHFoam's errors there are 0.06–0.22 cm, the smallest of
+the measurements. NHFOAM's errors there are 0.06–0.22 cm, the smallest of
 the three on the bar crest (32.5–34.5 m). Behind the bar, NHWAVE and REEF3D
 reproduce the shape of the decomposed waves better, which is again the
-dispersion of the free higher harmonics (5.2), and NHFoam's heights there
+dispersion of the free higher harmonics (5.2), and NHFOAM's heights there
 still drift slowly at the end of the run (at 41 m from 3.2 to 2.4 cm over
 the last 10 periods).
 
-Case C shows a weakness of NHFoam that shorter runs hid. Its records behind
+Case C shows a weakness of NHFOAM that shorter runs hid. Its records behind
 the bar do not settle: at 37.3 m the wave height stays near 3.7 cm until
 57 s and then grows to 5.0 cm by 65 s, at 41 m it swings between 4.9 and
 5.7 cm (lab 3.9 cm), and after about 60 s the irregularity reaches the
@@ -453,13 +453,13 @@ gauges in front of the bar. NHWAVE and REEF3D are periodic and within 15%
 of the lab heights at every gauge. The lab waves seem to break slightly on
 the bar crest (their height drops from 4.5 to 4.2 cm between 32.5 and
 33.5 m). The two other models dissipate the steep crests through their
-shock-capturing schemes. NHFoam runs the bar without a breaking model (with
+shock-capturing schemes. NHFOAM runs the bar without a breaking model (with
 the HFA switched on, the onset criterion was not reached in an earlier
 run), so nothing removes that energy. A velocity-only outlet sponge did
 not change this.
 
 Two numerical settings matter as much as the model:
-- **Time step.** With Δt = 10 ms instead of 5 ms, NHFoam's single-shift rms
+- **Time step.** With Δt = 10 ms instead of 5 ms, NHFOAM's single-shift rms
   error was 65% higher in case A and 150% higher in case C (central
   differencing, same 50 s windows). The free third harmonic behind the bar
   (T/3 = 0.34 s in case C) gets only 34 steps per period with Δt = 10 ms,
@@ -484,25 +484,25 @@ rises by ζ₀ = 0.5 mm in h = 5 cm of water with the exponential history
 ![landslide](doc/figures/landslide_models.png)
 
 **3D rigid landslide** (Enet & Grilli 2007, NTHMP benchmark 2, d = 61 mm).
-Half tank, symmetry wall on the axis. NHFoam: Δx = Δy = 2.5 cm, 5 layers
+Half tank, symmetry wall on the axis. NHFOAM: Δx = Δy = 2.5 cm, 5 layers
 (141 000 cells), 2 processors, about 10 min for 4 s; the domain starts 0.2 m
 from the shoreline (no wetting and drying). NHWAVE: its own benchmark set-up
 (`examples/landslide_benchmarks/BM2_enet_grilli`: Δx = 2 cm, 3 layers, full
 beach), with the gauges moved to the published positions. No time shift is
 applied.
 
-| gauge | first trough, lab / NHFoam / NHFoam graded / NHWAVE [mm] | first crest [mm] |
+| gauge | first trough, lab / NHFOAM / NHFOAM graded / NHWAVE [mm] | first crest [mm] |
 |---|---|---|
 | g2 (1.469, 0.35) | −13.7 / −14.9 / −14.9 / −14.9 | 15.0 / 15.2 / 16.8 / 16.3 |
 | g3 (1.929, 0) | −17.0 / −18.0 / −18.7 / −17.1 | 22.2 / 22.5 / 24.9 / 20.5 |
 | g4 (1.919, 0.5) | −9.4 / −9.5 / −9.4 / −9.6 | 11.0 / 11.6 / 12.4 / 12.3 |
 
-NHFoam gets the leading trough and crest within 9% (13% with graded
-layers), NHWAVE within 12%. NHFoam has them on time, NHWAVE about 0.05 t₀ early.
+NHFOAM gets the leading trough and crest within 9% (13% with graded
+layers), NHWAVE within 12%. NHFOAM has them on time, NHWAVE about 0.05 t₀ early.
 The trailing waves are where they differ: NHWAVE follows the measured phase
-and decay, while NHFoam's trailing waves are too large and, with uniform
+and decay, while NHFOAM's trailing waves are too large and, with uniform
 layers, too slow. That is the dispersion difference of 5.2 again: these
-waves have kh = 3–5. The wall that replaces NHFoam's beach also affects them
+waves have kh = 3–5. The wall that replaces NHFOAM's beach also affects them
 after t/t₀ ≈ 1.5. The lab records are in the same NHWAVE example folder.
 
 ### 5.6 Breaking
@@ -516,7 +516,7 @@ at x = 11 m (h = 3.9 cm) and continues as a 3 m shelf with a velocity-only
 sponge (`relaxEta false`). The run covers 40 periods (5 min on one core),
 and the statistics use the last 10.
 
-| H (mean of max − min per period) | lab | NHFoam |
+| H (mean of max − min per period) | lab | NHFOAM |
 |---|---|---|
 | near the toe, x < 1 m | 6.9–7.0 cm | 9–17% high |
 | shoaling, x = 2–7 m | 7.0–8.4 cm | −2% to +9% |
@@ -536,14 +536,14 @@ onset (α = 0.8) makes the comparison worse (rms 1.3 cm).
 drying), 10 layers, Δx = 2.5 cm, an 8 m linear wave zone and its breaking
 algorithm (`A 550 1`, onset parameter 0.6), breaks too early instead:
 largest H 9.4 cm at x = 6.9 m, rms 1.5 cm. Its incident waves are within 4%
-of the lab at the toe (NHFoam's are 9–17% high), and inshore of x = 8.3 m
+of the lab at the toe (NHFOAM's are 9–17% high), and inshore of x = 8.3 m
 its heights are 18–46% low. It overpredicts the setup at the shoreline
 (14 mm at x = 11 m against 4.5 mm measured at 10.5 m). Neither model gets
 this case right with default breaking parameters: the onset is the hard
 part. NHWAVE is not included yet: our run of this case (10 layers, k–ε,
 full beach) stopped after 4 s of simulated time without an error message.
 
-NHFoam does not reproduce the mean water level. There is no beach to hold
+NHFOAM does not reproduce the mean water level. There is no beach to hold
 the setup, the wave-making zone fixes the mean level offshore, and the
 shoaling zone shows a 2 mm offset (REEF3D shows the same offset). With a
 full sponge (η relaxed to zero) on the shelf, water drains out through the
@@ -592,7 +592,7 @@ instead of 10 ms, the same case fails after 11 periods.
 - **Dispersion per layer** is lower than with an interface pressure layout
   (NHWAVE, SWASH; see 5.2).
 - **Long runs behind steep waves do not settle.** Behind the submerged bar,
-  NHFoam's wave heights keep drifting after 50–65 s, and in case C the
+  NHFOAM's wave heights keep drifting after 50–65 s, and in case C the
   irregularity spreads up-wave (5.4). NHWAVE and REEF3D::NHFLOW stay
   periodic on the same set-up.
 
@@ -606,7 +606,7 @@ The comparison with NHWAVE and REEF3D::NHFLOW (section 5) sets the order:
 
 1. Pressure on the layer interfaces (as NHWAVE and SWASH), with p = 0
    exactly at the surface. This is what lets NHWAVE keep the period error
-   within 0.5% with 2–3 layers where NHFoam needs 10–20, and it is behind
+   within 0.5% with 2–3 layers where NHFOAM needs 10–20, and it is behind
    the better trailing waves of the landslide and the better wave shapes
    behind the bar.
 2. Steady long runs: volume-conserving wave-making zones (with a return

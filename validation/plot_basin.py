@@ -59,7 +59,7 @@ gauges = [(r"$r = 0.95$ m, $\theta = 0$", "#3969ac"),
 widths = [1.4, 3.2, 1.2]
 for j, (name, c) in enumerate(gauges):
     e = d[:, j + 1]
-    ax1.plot(t, 100 * e, color=c, lw=widths[j], label="NHFoam, " + name,
+    ax1.plot(t, 100 * e, color=c, lw=widths[j], label="NHFOAM, " + name,
              alpha=0.55 if j == 1 else 1.0)
     ax1.plot(t, 100 * e[0] * np.cos(w * t), "k--", lw=0.8)
 ax1.plot([], [], "k--", lw=0.8, label=rf"linear theory, $T = {T:.4f}$ s")

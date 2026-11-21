@@ -1,6 +1,6 @@
 #!/bin/sh
 cd "${0%/*}" || exit 1
-# Build NHFoam: support library, solver and initial-condition utility
+# Build NHFOAM: support library, solver and initial-condition utility
 # (source your OpenFOAM environment first, e.g. ESI OpenFOAM v2512)
 
 if [ -z "$WM_PROJECT_DIR" ]
@@ -10,9 +10,9 @@ then
 fi
 
 set -e
-wmake libso src/NHFoam
-wmake applications/solvers/NHFoam
+wmake libso src/NHFOAM
+wmake applications/solvers/NHFOAM
 wmake applications/utilities/nhSetWaves
 
 echo
-echo "NHFoam built: $FOAM_USER_APPBIN/NHFoam, $FOAM_USER_APPBIN/nhSetWaves"
+echo "NHFOAM built: $FOAM_USER_APPBIN/NHFOAM, $FOAM_USER_APPBIN/nhSetWaves"

@@ -1,14 +1,14 @@
 /*---------------------------------------------------------------------------*\
   =========                 |
-  \\      /  F ield         | NHFoam: non-hydrostatic free-surface wave solver
+  \\      /  F ield         | NHFOAM: non-hydrostatic free-surface wave solver
    \\    /   O peration     |
     \\  /    A nd           |
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
-    This file is part of NHFoam, built on OpenFOAM.
+    This file is part of NHFOAM, built on OpenFOAM.
 
-    NHFoam is free software: you can redistribute it and/or modify it
+    NHFOAM is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
@@ -17,7 +17,7 @@ Application
     nhSetWaves
 
 Description
-    Initial free surface (eta) and velocity (U) for NHFoam.
+    Initial free surface (eta) and velocity (U) for NHFOAM.
 
     Reads system/nhSetWavesDict, overwrites the values of eta and U in the
     start-time directory (boundary conditions are kept):
@@ -49,7 +49,7 @@ Description
     \endverbatim
 
     Velocities are evaluated at the cell heights the sigma mesh will have
-    once NHFoam places it on the new free surface.
+    once NHFOAM places it on the new free surface.
 
 \*---------------------------------------------------------------------------*/
 
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 {
     argList::addNote
     (
-        "Set the initial free surface and velocity for NHFoam"
+        "Set the initial free surface and velocity for NHFOAM"
     );
 
     #include "setRootCase.H"
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
     (
         IOobject
         (
-            "NHFoamProperties",
+            "NHFOAMProperties",
             runTime.constant(),
             mesh,
             IOobject::MUST_READ,

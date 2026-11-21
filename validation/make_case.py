@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate 2DV NHFoam cases (standing wave, solitary wave, Beji-Battjes bar)."""
+"""Generate 2DV NHFOAM cases (standing wave, solitary wave, Beji-Battjes bar)."""
 import os, sys, math, textwrap
 
 HDR = """/*--------------------------------*- C++ -*----------------------------------*\\
   =========                 |
-  \\\\      /  F ield         | NHFoam
+  \\\\      /  F ield         | NHFOAM
    \\\\    /   O peration     |
     \\\\  /    A nd           |
      \\\\/     M anipulation  |
@@ -58,7 +58,7 @@ internalField   uniform 0;
 
 boundaryField
 {{
-    // Free surface: coefficients are set by NHFoam every corrector
+    // Free surface: coefficients are set by NHFOAM every corrector
     surface
     {{
         type            mixed;
@@ -105,7 +105,7 @@ nu              [0 2 -1 0 0 0 0] {nu:g};
     write(case, "constant/turbulenceProperties", "dictionary", """
 simulationType  laminar;
 """)
-    write(case, "constant/NHFoamProperties", "dictionary", f"""
+    write(case, "constant/NHFOAMProperties", "dictionary", f"""
 // Free-surface (top) and bottom patches of the sigma mesh
 surfacePatch    surface;
 bottomPatch     bottom;
@@ -126,9 +126,9 @@ CONV_BREAKING = "Gauss limitedLinearV 1"
 
 
 def system_files(case, endTime, deltaT, writeInterval, ddt="backward 1", nCorr=3, nNonOrth=0, pTol=1e-12, extraSolver="", libs=False, conv=None):
-    libsLine = 'libs            ("libNHFoam.so");   // nhMovingSlipVelocity for utilities\n\n' if libs else ""
+    libsLine = 'libs            ("libNHFOAM.so");   // nhMovingSlipVelocity for utilities\n\n' if libs else ""
     write(case, "system/controlDict", "dictionary", f"""
-{libsLine}application     NHFoam;
+{libsLine}application     NHFOAM;
 
 startFrom       startTime;
 startTime       0;
@@ -401,7 +401,7 @@ direction       (1 0 0);
     allrun(case, """
     runApplication blockMesh
     runApplication nhSetWaves
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
     return dict(k=k, L=L, T=T, dt=dt)
 
@@ -473,7 +473,7 @@ gauges
     common_fields(case)
     allrun(case, """
     runApplication blockMesh
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
 
 
@@ -503,7 +503,7 @@ direction       (1 0 0);
     allrun(case, """
     runApplication blockMesh
     runApplication nhSetWaves
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
 
 
@@ -562,7 +562,7 @@ forcingZones
         f.write(f"h {h}\nb {b}\nzeta0 {zeta0}\ntc {tc}\ndx {dx}\n")
     allrun(case, """
     runApplication blockMesh
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
 
 
@@ -625,7 +625,7 @@ forcingZones
     open(p, "w").write(s)
     allrun(case, """
     runApplication blockMesh
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
 
 
@@ -745,7 +745,7 @@ forcingZones
         f.write(f"d {d}\nx0 {s['x0']}\nut {s['ut']}\na0 {s['a0']}\nb 0.395\n")
     allrun(case, """
     runApplication blockMesh
-    runApplication NHFoam
+    runApplication NHFOAM
     """)
 
 
@@ -819,5 +819,5 @@ forcingZones
         f.write(f"test {test}\nT {T}\nH {H}\n")
     allrun(case, """
     runApplication blockMesh
-    runApplication NHFoam
+    runApplication NHFOAM
     """)

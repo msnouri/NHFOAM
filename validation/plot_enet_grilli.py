@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NTHMP landslide benchmark 2 (Enet & Grilli 2007, d = 61 mm): NHFoam gauges
+"""NTHMP landslide benchmark 2 (Enet & Grilli 2007, d = 61 mm): NHFOAM gauges
 vs lab data.
 
 usage: plot_enet_grilli.py <labFile> <out.png> [kind:]<case>[:label] ...
@@ -38,7 +38,7 @@ styles = ["-", "--", "-.", ":"]
 
 
 def gauges(kind, case):
-    """Time and {g1..g4: eta} for an NHFoam or NHWAVE run."""
+    """Time and {g1..g4: eta} for an NHFOAM or NHWAVE run."""
     if kind == "nhfoam":
         fn = os.path.join(case, "postProcessing/gauges/0/eta.dat")
         d = np.loadtxt(fn, comments="#")
