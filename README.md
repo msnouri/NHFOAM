@@ -12,10 +12,11 @@ OpenFOAM's parallelism, boundary conditions, turbulence models, fvOptions and
 function objects.
 
 > Status: research code. 2DV and 3D, pressure on the layer interfaces as in
-> NHWAVE (2–3 layers resolve dispersion up to kh = 7), prescribed seabed
-> motion (tsunami generation, solid landslides) and depth-induced breaking
-> with the hydrostatic front approximation. No wetting and drying yet. See
-> *Limitations* and *Roadmap* below.
+> NHWAVE (2–3 layers resolve dispersion up to kh = 7), second order in time,
+> prescribed seabed motion (tsunami generation, solid landslides) and
+> depth-induced breaking with the hydrostatic front approximation. No wetting
+> and drying yet. See *Limitations* and *Roadmap* below.
+
 
 ---
 
@@ -130,7 +131,13 @@ and target of the forcing zones.
 1. Move the mesh to the extrapolated surface. Optionally, move it to the
    latest η in every outer corrector (`moveMeshOuterCorrectors`).
 2. Rebuild the flux on the moved faces from the face velocity Uf, and make it
-   relative to the mesh motion.
+   relative to the mesh motion. In the first outer corrector, Uf is
+   extrapolated from the last two time levels,
+   (1 + r) Uf<sup>n</sup> − r Uf<sup>n−1</sup> with r = Δt/Δt₀
+   (`fluxExtrapolation`, default with backward). Convecting with the flux of
+   level n instead makes the scheme only first order in time for nonlinear
+   waves: a solitary wave of H/h = 0.5 lost three times more height and fell
+   0.8 m behind in 150 m (section 6.2).
 3. Momentum predictor, with the pressure gradient of the last corrector.
 4. Pressure correctors. Each one solves for the interface pressures and p_s
    (or, in the cell layout, sets the surface Robin coefficients from φHbyA
@@ -172,12 +179,14 @@ vertical fluxes.
 The wave front then travels as a bore. The conservative momentum equation
 with a TVD convection scheme dissipates its energy.
 
-**Convection.** The tutorials and validation cases convect momentum with
-the TVD scheme `Gauss limitedLinearV 1`. Over 8 wavelengths, waves of
-H = 4.1 cm lose 4.4% of their height with it, 6% with `linearUpwind` and 3.9%
-with central differencing (see *Verification*). Central differencing is not
-robust, though: in the bar cases (cell layout) grid-scale noise grew behind
-the bar and the runs failed after 50–60 s. Bores need a TVD scheme anyway.
+**Convection.** For waves that do not break, use filtered central
+differencing, `Gauss filteredLinear2V 0.2 0`: it damps as little as central
+differencing, and its filter on grid-scale oscillations kept it stable in
+40–65 s runs over the submerged bar and in 3D. The TVD scheme
+`Gauss limitedLinearV 1` damps steep short waves even when they do not break
+(8.5% of a standing wave at kD = 3π in 30 s, against 1.7%; section 6.1), but
+bores need it, so breaking cases keep it. Plain central differencing
+(`Gauss linear`) fails in long nonlinear runs and behind bores.
 
 ---
 
@@ -322,13 +331,15 @@ such as `decomposePar` know that condition.
 You also need `constant/g` (along −z), `transportProperties` and
 `turbulenceProperties`, as in pimpleFoam.
 
-**`system/fvSchemes`: full ddt flux correction and TVD convection.**
+**`system/fvSchemes`: full ddt flux correction and low-dissipation
+convection.**
 
 ```c++
 ddtSchemes { default backward 1; }        // "1" = ddtPhiCoeff
 divSchemes
 {
-    div(phi,U)  Gauss limitedLinearV 1;   // TVD
+    div(phi,U)  Gauss filteredLinear2V 0.2 0;  // waves that do not break
+//  div(phi,U)  Gauss limitedLinearV 1;        // TVD, where waves break
 }
 ```
 
@@ -337,9 +348,12 @@ and waves are visibly damped. In our standing-wave test, amplitude loss went
 from 3.9% to 0.09% over 4.5 periods once the coefficient was set. NHFOAM
 prints a warning if it is missing. Euler works, but it is far too
 dissipative for wave propagation. Upwind-biased convection (`linearUpwind`,
-`LUST`) damps progressive waves of moderate steepness. Central
+`LUST`) damps progressive waves of moderate steepness, and the TVD
+`limitedLinearV` damps steep short waves (section 6.1). Central
 differencing (`Gauss linear`) damps least, but grid-scale noise grows in
-long nonlinear runs and behind bores, and the runs fail.
+long nonlinear runs and behind bores, and the runs fail; the filtered
+version `filteredLinear2V 0.2 0` does not have this problem in the tests so
+far, except with bores.
 
 **Time step.** Resolve the shortest wave that matters, not only the peak
 period. Behind the submerged bar, halving Δt to 5 ms (T/400 in case A,
@@ -350,8 +364,10 @@ harmonics there have periods of T/2 and T/3 (see 5.4).
 
 | entry | value |
 |---|---|
+| `nOuterCorrectors` | 1 (with flux extrapolation, a second one changes nothing in the tests) |
 | `nCorrectors` | 2–3 |
 | `nNonOrthogonalCorrectors` | 1 over sloping beds (it also updates the lagged terms of the interface matrix) |
+| `fluxExtrapolation` | `true` (default with backward): second order in time with one outer corrector |
 | `moveMeshOuterCorrectors` | `false` (default) |
 | `ddtCorr` | `true` (default) |
 
@@ -411,6 +427,9 @@ matplotlib's own Computer Modern.
 ---
 
 ## 5. Verification and comparison with NHWAVE and REEF3D::NHFLOW
+
+*These runs predate the fixes of section 6: they use `limitedLinearV` and
+one outer corrector without flux extrapolation.*
 
 Where possible, the benchmarks below were also run with two established
 non-hydrostatic σ-layer models, on the same set-up: the same domain, bottom,
@@ -718,7 +737,99 @@ periods.
 
 ---
 
-## 6. Limitations (this version)
+## 6. Validation against NHWAVE: the tests of Ma et al. (2012)
+
+Ma, Shi & Kirby (2012) introduced NHWAVE with seven tests. They were run here
+with NHWAVE and NHFOAM on the same set-ups, from the simplest upwards, and
+each was used to look for weaknesses of NHFOAM before moving on.
+`validation/ma2012.py` writes the cases for both models.
+
+| test (Ma et al. 2012) | reference | status |
+|---|---|---|
+| 4.1 standing wave in a closed basin, kD = π, 2π, 3π | linear theory | 6.1 |
+| 4.2 solitary wave, H/h = 0.5 | exact solution | 6.2 |
+| 4.3 periodic waves over a submerged bar | Luth et al. (1994) | 6.3 |
+| 4.4 elliptic shoal on a 1:50 slope | Berkhoff et al. (1982) | runs in progress |
+| 4.5 breaking solitary wave run-up | Synolakis (1987) | needs wetting and drying |
+| 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 5.5 (rerun with the fixes in progress) |
+| 4.7 longshore current on a plane beach | Visser (1991) | needs wetting and drying |
+
+Two of the tests changed the code and its defaults: the standing waves
+showed that the TVD scheme damps steep short waves, and the solitary wave
+that the time integration was only first order for nonlinear waves.
+
+### 6.1 Standing wave in a closed basin
+
+![basin](doc/figures/ma2012_basin.png)
+
+L = 20 m (one wavelength), a = 0.1 m, D = 10, 20, 30 m, Δx = 0.2 m, 30 s;
+normalised rms error at x = 17.5 m against linear theory, as in the paper.
+Our NHWAVE runs reproduce the published errors to within 0.1 percentage
+points. NHFOAM's error is 2.5–4 times smaller with `limitedLinearV` and
+3–20 times smaller with `filteredLinear2V 0.2 0`:
+
+| kD | layers | Ma et al. | NHWAVE | NHFOAM, limitedLinearV | NHFOAM, filteredLinear2V |
+|---|---|---|---|---|---|
+| π | 3 / 5 / 10 | 1.63 / 0.90 / 0.53% | 1.69 / 0.87 / 0.60% | 0.65 / 0.18 / 0.11% | 0.56 / 0.12 / 0.11% |
+| 2π | 3 / 5 / 10 | 3.07 / 1.50 / 0.64% | 3.05 / 1.43 / 0.66% | 1.08 / 0.67 / 0.24% | 0.16 / 0.16 / 0.17% |
+| 3π | 3 / 5 / 10 | 4.90 / 2.50 / 1.00% | 4.81 / 2.40 / 0.94% | 1.28 / 1.17 / 0.48% | 0.25 / 0.17 / 0.17% |
+
+The difference between the two schemes is damping: at kD = 3π with 3
+layers, `limitedLinearV` loses 8.5% of the amplitude in 30 s,
+`filteredLinear2V` 1.7%. The damping is nonlinear (a wave ten times smaller
+loses 0.09%) and does not depend on Δt.
+
+### 6.2 Solitary wave
+
+![solitary](doc/figures/ma2012_solitary.png)
+
+H/h = 0.5, h = 1 m, Δx = 0.1 m, 3 layers, 40 s (150 m). Both models start
+from the exact solution of Babenko's equation (`validation/solitary_exact.py`,
+Petviashvili iteration to a residual of 1e-13). Peaks of η, and of u and w at
+mid-depth, after 40 s:
+
+| run | η | u | w | crest | CPU |
+|---|---|---|---|---|---|
+| NHWAVE (CFL 0.5) | −2.3% | −0.7% | +0.4% | −0.08 m | 570 s |
+| NHFOAM before the fix (Δt = 5 ms) | −6.4% | −4.3% | −4.6% | −0.77 m | 240 s |
+| … with Δt = 10 ms / 2.5 ms | −10.3% / −4.4% | −7.6% / −2.6% | −9.4% / −2.2% | −1.37 / −0.47 m | |
+| … with 2 (or 3) outer correctors | −2.3% | −0.9% | +0.2% | −0.17 m | 390 s |
+| NHFOAM, flux extrapolation | −2.3% | −0.9% | +0.3% | −0.17 m | 210 s |
+| NHFOAM, flux extrapolation, `filteredLinear2V` | **−1.0%** | **−0.2%** | **+1.6%** | **−0.07 m** | 210 s |
+
+Before the fix the error grew linearly with Δt: the convection term was
+linearised with the flux of the previous time level, a first-order error.
+Neither the convection scheme, 5 layers nor a non-orthogonal corrector
+changed it, and a second outer corrector gave the same result whether the
+mesh was moved again or not. Extrapolating the convecting flux removes the
+error at no cost. With `filteredLinear2V` the wave then keeps its height
+after an initial adjustment of about 1%.
+
+### 6.3 Submerged bar with 3 layers
+
+![bar3](doc/figures/ma2012_bar.png)
+
+NHWAVE's own example (`examples/submerged_bar`: boundary wavemaker, 10 m
+sponge, Δx = 2 cm, 3 layers, CFL 0.5, bottom friction Cd = 0.006 as
+distributed) with all ten gauges, against NHFOAM on the same domain with an
+8 m wave zone upstream of NHWAVE's wavemaker, Δt = 5 ms. 40 s runs, compared
+with Luth et al. case A over the last 4 s, one time shift per run:
+
+| | NHFOAM | NHWAVE | NHFOAM before the fix |
+|---|---|---|---|
+| rms error over the 10 gauges | 0.31 cm | 0.24 cm | 0.16 cm |
+| mean \|ΔH\|/H | 4.9% | 3.8% | 4.6% |
+| phase at x = 35.7–41 m relative to x = 22 m | 0.05–0.08 s early | 0.03–0.08 s early | 0.01–0.035 s early |
+
+After the fix NHFOAM's waves over and behind the bar are as early as
+NHWAVE's, by up to 0.08 s. Before it they were closer to the measured phase,
+because the first-order lag slowed them by about 0.5%, the same lag that
+delayed the solitary wave; with the fix, halving Δt moves the phase by less
+than 0.005 s. Most of the rms error is this phase error, which both models
+share. A second outer corrector, filtered convection or the TVD
+scheme change the rms error by less than 0.02 cm.
+
+## 7. Limitations (this version)
 
 - **No wetting and drying.** The depth is only limited by `minDepth`. Runup,
   inundation and the wave setup at the shoreline are not possible yet;
@@ -734,32 +845,40 @@ periods.
   There is no boundary wavemaker and no irregular, cnoidal or stream-function
   input.
 - **Restarts** do not save the BDF2 history of η or Uf. The first step after
-  a restart is Euler, and the flux is rebuilt from U.
+  a restart is Euler without flux extrapolation, and the flux is rebuilt
+  from U.
 - **Long waves in closed flumes.** The relaxation zones absorb long waves
   only partly, and the wave-making zone does not conserve volume (no return
   current for the Stokes drift). Long waves of a few millimetres therefore
   build up in closed flumes. Over the submerged bar they shift the phase of
   the waves by about 0.2 s within 20 s of simulated time, more than in
   NHWAVE and REEF3D::NHFLOW (5.4). Compare long runs at the same times.
+- **Phase over the submerged bar.** With 3 layers, NHFOAM and NHWAVE both
+  have the waves behind the bar up to 0.08 s early (6.3). The cause (linear
+  wave generation, long waves of the flume) is not yet identified.
 
-## 7. Roadmap
+## 8. Roadmap
 
 Done since the first version: prescribed seabed motion (uplift, rigid
 slides), the hydrostatic front approximation, central convection,
-surface-refined layers, velocity-only sponges, and the pressure on the
-layer interfaces (NHWAVE's arrangement) with a column preconditioner.
+surface-refined layers, velocity-only sponges, the pressure on the layer
+interfaces (NHWAVE's arrangement) with a column preconditioner, and, from
+the tests of Ma et al. (2012), second-order time integration (extrapolated
+convecting flux) and filtered central convection for non-breaking waves.
 
-The comparison with NHWAVE and REEF3D::NHFLOW (section 5) sets the order:
+The comparisons with NHWAVE and REEF3D::NHFLOW (sections 5 and 6) set the
+order. Wetting and drying comes first now: it is what the remaining tests of
+Ma et al. (4.5 and 4.7) need.
 
-1. Breaking: the dissipation of the hydrostatic bores in the surf zone
+1. Wetting/drying with thin-film columns and q switched off in very shallow
+   water, so that beaches, runup and setup can be modelled.
+2. Breaking: the dissipation of the hydrostatic bores in the surf zone
    (momentum-conserving face depths at the fronts, or a small eddy
    viscosity there), a kinematic B = u/c onset trigger, and stabilised k–ω
    (Larsen & Fuhrman 2018) for many-layer runs.
-2. Steady long runs: volume-conserving wave-making zones (with a return
+3. Steady long runs: volume-conserving wave-making zones (with a return
    current for the Stokes drift, as in a closed flume) and absorbing zones
    that also take out the long waves of the flume (see 5.4).
-3. Wetting/drying with thin-film columns and q switched off in very shallow
-   water, so that beaches, runup and setup can be modelled.
 4. Nonlinear wave generation (stream function, cnoidal) and irregular
    spectra in the relaxation zones; a boundary wavemaker.
 5. Depth-integrated granular slides on a finite-area mesh for landslide
@@ -769,7 +888,7 @@ The comparison with NHWAVE and REEF3D::NHFLOW (section 5) sets the order:
 7. Hybrid meshes: a fixed body-fitted region around structures, with σ-layers
    only near the surface; porous media (Darcy–Forchheimer fvModel).
 
-## 8. References
+## 9. References
 
 - Ma, G., Shi, F., Kirby, J.T. (2012). Shock-capturing non-hydrostatic model
   for fully dispersive surface wave processes. *Ocean Modelling* 43–44, 22–35.
@@ -784,6 +903,16 @@ The comparison with NHWAVE and REEF3D::NHFLOW (section 5) sets the order:
   waters. *Coastal Engineering* 58, 992–1012.
 - Smit, P., Zijlema, M., Stelling, G. (2013). Depth-induced wave breaking in a
   non-hydrostatic, near-shore wave model. *Coastal Engineering* 76, 1–16.
+- Babenko, K.I. (1987). Some remarks on the theory of surface waves of
+  finite amplitude. *Soviet Math. Dokl.* 35, 599–603.
+- Clamond, D., Dutykh, D. (2013). Fast accurate computation of the fully
+  nonlinear solitary surface gravity waves. *Computers & Fluids* 84, 35–38.
+- Berkhoff, J.C.W., Booy, N., Radder, A.C. (1982). Verification of numerical
+  wave propagation models for simple harmonic linear water waves. *Coastal
+  Engineering* 6, 255–279.
+- Synolakis, C.E. (1987). The runup of solitary waves. *JFM* 185, 523–545.
+- Visser, P.J. (1991). Laboratory measurements of uniform longshore currents.
+  *Coastal Engineering* 15, 563–593.
 - Beji, S., Battjes, J.A. (1993). Experimental investigation of wave
   propagation over a bar. *Coastal Engineering* 19, 151–162.
 - Luth, H.R., Klopman, G., Kitou, N. (1994). Kinematics of waves breaking

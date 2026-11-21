@@ -11,7 +11,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 case, out = sys.argv[1], sys.argv[2]
 H, h, x0, L, dx = 0.1, 1.0, 10.0, 60.0, 0.05
 Nx = int(round(L / dx))
@@ -21,7 +21,7 @@ c = math.sqrt(9.81 * (h + H))
 times = sorted([d for d in os.listdir(case)
                 if re.match(r"^[0-9.]+$", d) and float(d) > 0], key=float)
 
-fig, ax = plt.subplots(figsize=(8.5, 3.4))
+fig, ax = plt.subplots(figsize=(7.5, 3.6))
 for tn in ["0"] + times:
     if tn == "0":
         e = H / np.cosh(K * (x - x0)) ** 2
@@ -36,6 +36,6 @@ ax.set_ylim(-0.6, 14.5)
 ax.set_xlabel(r"$x$ [m]"); ax.set_ylabel(r"$\eta$ [cm]")
 ax.grid(alpha=0.3)
 ax.set_title(r"Solitary wave, $H/h = 0.1$, 10 layers, $\Delta x = 0.05$ m")
-ax.legend(ncol=3, loc="upper center")
+ax.legend(ncol=3, loc="upper center", fontsize=10)
 fig.tight_layout()
 save(fig, out)

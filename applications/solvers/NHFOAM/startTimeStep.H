@@ -7,6 +7,9 @@
     etaN = etaCol;
     ++nEtaLevels;
 
+    UfNm1 = UfN;
+    UfN = Uf;
+
     const scalar dt = runTime.deltaTValue();
     const scalar dt0 = runTime.deltaT0Value();
 

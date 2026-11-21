@@ -46,7 +46,9 @@ Description
         column, in the cell layout as a Robin (mixed) condition for p_rgh
         on the surface patch.  Each pressure solve therefore yields q and
         eta^{n+1} together.  No gravity-wave Courant limit; Euler or
-        backward (BDF2) in time, following ddt(U).
+        backward (BDF2) in time, following ddt(U).  With BDF2 the convecting
+        flux of the first outer corrector is extrapolated from the last two
+        time levels, so one outer corrector is second order in time.
       - Prescribed bottom motion (seabed uplift, solid slides).
       - Wave breaking with the hydrostatic front approximation (HFA).
       - Sponge and wave-making relaxation zones, wave gauges.

@@ -9,7 +9,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 T, out = float(sys.argv[1]), sys.argv[2]
 cases = [(c.split(":")[0], c.split(":")[1]) for c in sys.argv[3:]]
 cols = ["#c0392b", "#e67e22", "#2e8b57", "#1f5fa8", "#7f8c8d"]
@@ -27,6 +27,6 @@ ax.set_xlabel(r"$x$ [m] (wave-making zone $0$--$8$ m)")
 ax.set_ylabel(r"$H$ [cm]")
 ax.set_title(r"Flat flume, $h = 0.4$ m, $T = 1.01$ s, target $H = 4.1$ cm, 10 layers, $\Delta x = 2$ cm")
 ax.grid(alpha=0.3)
-ax.legend(fontsize=9)
+ax.legend(fontsize=10)
 fig.tight_layout()
 save(fig, out, dpi=150)

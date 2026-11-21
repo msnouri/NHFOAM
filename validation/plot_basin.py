@@ -12,7 +12,7 @@ from matplotlib.collections import PolyCollection
 from scipy.special import jv
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 case, out = sys.argv[1], sys.argv[2]
 R, h, a = 1.0, 0.5, 0.005
 k = 1.841183781
@@ -38,15 +38,14 @@ r = np.hypot(cent[:, 0], cent[:, 1])
 th = np.arctan2(cent[:, 1], cent[:, 0])
 eta0 = a * jv(1, k * r) * np.cos(th)
 
-fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10.5, 4.2),
+fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(7.5, 4.0),
                                gridspec_kw={"width_ratios": [1, 1.6]})
 pc = PolyCollection(polys, array=100 * eta0, cmap="RdBu_r",
                     edgecolors="0.35", linewidths=0.25)
 ax0.add_collection(pc)
 ax0.set_xlim(-1.05, 1.05); ax0.set_ylim(-1.05, 1.05); ax0.set_aspect("equal")
 ax0.set_xlabel(r"$x$ [m]"); ax0.set_ylabel(r"$y$ [m]")
-ax0.set_title(f"Unstructured surface mesh ({len(tris)} triangles)" + "\n"
-              + r"initial $\eta$ [cm]")
+ax0.set_title(f"{len(tris)} triangles," + "\n" + r"initial $\eta$ [cm]")
 fig.colorbar(pc, ax=ax0, shrink=0.8)
 
 d = np.loadtxt(f"{case}/postProcessing/gauges/0/eta.dat", comments="#")
@@ -65,7 +64,8 @@ for j, (name, c) in enumerate(gauges):
 ax1.plot([], [], "k--", lw=0.8, label=rf"linear theory, $T = {T:.4f}$ s")
 ax1.set_xlabel(r"$t$ [s]"); ax1.set_ylabel(r"$\eta$ [cm]")
 ax1.grid(alpha=0.3)
-ax1.legend(loc="lower left")
-ax1.set_title(r"First sloshing mode, $h = 0.5$ m, 8 layers (prisms)")
-fig.tight_layout()
+h, l = ax1.get_legend_handles_labels()
+fig.legend(h, l, loc="lower center", ncol=2, fontsize=10, frameon=False)
+ax1.set_title(r"First sloshing mode, $h = 0.5$ m, 8 layers")
+fig.tight_layout(rect=(0, 0.14, 1, 1))
 save(fig, out)

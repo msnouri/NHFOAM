@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 from analyse_standing import fit
 
-use_latex(10)
+use_latex()
 nf = np.genfromtxt(sys.argv[1], delimiter=",", names=True)
 nwdir, out = sys.argv[2], sys.argv[3]
 nc = (np.genfromtxt(sys.argv[4], delimiter=",", names=True)
@@ -39,7 +39,7 @@ for kh in khs:
         nw[(kh, nl)] = (Tzc / T, amp)
         print(f"{kh:4g} {nl:3d} {Tzc / T:.5f} {amp:.4f}")
 
-fig, axes = plt.subplots(1, 2, figsize=(10, 4.1))
+fig, axes = plt.subplots(1, 2, figsize=(7.5, 4.4))
 cols = {2: "#8e44ad", 3: "#c0392b", 10: "#1f5fa8"}
 
 
@@ -71,13 +71,14 @@ for nl, col in cols.items():
         axes[1].plot(kh, 100*(1 - a), "^:", color=col, ms=4, alpha=0.7)
 
 axes[0].set_ylabel(r"$|$period error$|$ [\%]")
-axes[1].set_ylabel(r"amplitude loss after 4.5 periods [\%]")
+axes[1].set_ylabel(r"amplitude loss in 4.5 periods [\%]")
 axes[0].set_ylim(0.01, 60)
 for ax in axes:
     ax.set_xlabel(r"$kh$")
     ax.grid(alpha=0.3, which="both")
-axes[0].legend(fontsize=7, ncol=1, loc="upper left")
+h, l = axes[0].get_legend_handles_labels()
+fig.legend(h, l, loc="lower center", ncol=3, fontsize=9, frameon=False)
 fig.suptitle(r"Standing waves, 64 cells per wavelength, $T/\Delta t = 200$,"
              r" uniform layers")
-fig.tight_layout()
+fig.tight_layout(rect=(0, 0.17, 1, 1))
 save(fig, out, dpi=150)

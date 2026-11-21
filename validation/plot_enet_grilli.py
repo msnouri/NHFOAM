@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 import other_models as om
 
-use_latex(10)
+use_latex()
 
 labfile, out = sys.argv[1:3]
 runs = [om.parse_case(c) for c in sys.argv[3:]]

@@ -233,13 +233,14 @@ def read_nhfoam(case, xs=None):
 
 
 def parse_case(arg):
-    """'[nhfoam|nhwave|reef3d:]path[:label]' -> (kind, path, label)."""
+    """'[nhfoam|nhwave|reef3d:]path[:label]' -> (kind, path, label); the label
+    may itself contain colons (REEF3D::NHFLOW)."""
     parts = arg.split(":")
     kind = "nhfoam"
     if parts[0] in ("nhfoam", "nhwave", "reef3d"):
         kind = parts.pop(0)
     path = parts[0]
-    label = parts[1] if len(parts) > 1 else os.path.basename(path.rstrip("/"))
+    label = ":".join(parts[1:]) if len(parts) > 1 else os.path.basename(path.rstrip("/"))
     return kind, path, label
 
 

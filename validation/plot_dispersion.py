@@ -11,7 +11,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 rows = list(csv.DictReader(open(sys.argv[1])))
 out = sys.argv[2]
 title = sys.argv[3] if len(sys.argv) > 3 else "Linear dispersion: standing waves, 64 cells per wavelength"

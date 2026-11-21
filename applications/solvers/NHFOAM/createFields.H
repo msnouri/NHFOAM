@@ -217,6 +217,12 @@ surfaceVectorField Uf
     fvc::interpolate(U)
 );
 
+// Face velocities of the last two time levels, n and n-1: the convecting
+// flux of the first outer corrector is extrapolated from them
+// (fluxExtrapolation)
+surfaceVectorField UfN("UfN", Uf);
+surfaceVectorField UfNm1("UfNm1", Uf);
+
 
 singlePhaseTransportModel laminarTransport(U, phi);
 

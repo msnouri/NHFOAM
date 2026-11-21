@@ -48,6 +48,7 @@ PIMPLE
     nCorrectors               3;
     nNonOrthogonalCorrectors  1;
     moveMeshOuterCorrectors   false;
+    fluxExtrapolation         true;   // extrapolated convecting flux: second order in time with one outer corrector
 }
 
 relaxationFactors

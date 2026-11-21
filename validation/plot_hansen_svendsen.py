@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 import other_models as om
 
-use_latex(10)
+use_latex()
 labfile, T, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 runs = [om.parse_case(c) for c in sys.argv[4:]]
 lab = np.loadtxt(labfile)

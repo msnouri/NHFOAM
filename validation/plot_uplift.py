@@ -15,7 +15,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 case, out = sys.argv[1], sys.argv[2]
 p = dict(l.split() for l in open(f"{case}/params.txt"))
 h, b, z0, tc, dx = (float(p[k]) for k in ("h", "b", "zeta0", "tc", "dx"))

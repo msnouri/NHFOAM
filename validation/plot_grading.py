@@ -9,9 +9,9 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 
-use_latex(10)
+use_latex()
 d = np.genfromtxt(sys.argv[1], delimiter=",", names=True)
-fig, axes = plt.subplots(1, 2, figsize=(9, 3.6), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.5), sharey=True)
 cols = {1.0: "#1f5fa8", 0.5: "#e67e22", 0.25: "#2e8b57"}
 for ax, nl in zip(axes, (3, 5)):
     for gr, col in cols.items():
@@ -25,7 +25,7 @@ for ax, nl in zip(axes, (3, 5)):
     ax.set_xlabel(r"$kh$")
     ax.grid(alpha=0.3)
 axes[0].set_ylabel(r"period error [\%]")
-axes[0].legend()
+axes[0].legend(fontsize=10)
 fig.suptitle(sys.argv[3] if len(sys.argv) > 3 else
              r"Standing waves: uniform vs surface-refined $\sigma$-layers")
 fig.tight_layout()

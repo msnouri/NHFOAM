@@ -21,7 +21,7 @@ def _have_latex():
         return False
 
 
-def use_latex(fontsize=10):
+def use_latex(fontsize=12):
     """Set the rcParams; returns True if real LaTeX is used."""
     usetex = _have_latex()
     mpl.rcParams.update({

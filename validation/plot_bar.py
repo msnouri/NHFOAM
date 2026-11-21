@@ -2,7 +2,7 @@
 """Submerged bar (Luth et al. 1994, cases A and C): gauges of NHFOAM (and of
 NHWAVE / REEF3D::NHFLOW runs of the same set-up) vs lab data.
 
-usage: plot_bar.py [--caseC] [--tend <t>] <labDataDir> <out.png> [kind:]<case>[:label] ...
+usage: plot_bar.py [--caseC] [--tend <t>] [--title <t>] <labDataDir> <out.png> [kind:]<case>[:label] ...
     kind = nhfoam (default) | nhwave | reef3d   (see other_models.py)
     --tend: end every run at time t (same window for all models; the slow
             long-wave motion of the flume changes the phase over the bar)
@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from latex_style import use_latex, save
 import other_models as om
 
-use_latex(10)
+use_latex()
 
 args = sys.argv[1:]
 T = 2.02
@@ -29,6 +29,10 @@ if "--caseC" in args:
     args.remove("--caseC")
     T = 1.01
     title = r"Submerged bar, case C ($H = 4.1$ cm, $T = 1.01$ s)"
+if "--title" in args:
+    i = args.index("--title")
+    title = args[i + 1]
+    del args[i:i + 2]
 tEnd = None
 if "--tend" in args:
     i = args.index("--tend")
@@ -47,7 +51,7 @@ styles = ["-", "--", "-.", ":", (0, (1, 1))]
 allLab = np.concatenate([v[:, 1] for v in lab.values()])
 labTmax = max(v[:, 0].max() for v in lab.values())
 ylo, yhi = 100 * 1.6 * allLab.min(), 100 * 1.35 * allLab.max()
-fig, axes = plt.subplots(5, 2, figsize=(11, 12.5), sharex=True)
+fig, axes = plt.subplots(5, 2, figsize=(7.5, 10.5), sharex=True)
 report = []
 for (kind, path, label), col, ls in zip(runs, cols, styles):
     t, eta = om.read_any(kind, path, xs)
@@ -86,10 +90,11 @@ for k, x in enumerate(xs):
     if k % 2 == 0:
         ax.set_ylabel(r"$\eta$ [cm]")
 for ax in axes[-1]:
-    ax.set_xlabel(r"$t$ [s] (one time shift per run)")
-axes.flat[0].legend(loc="upper right", fontsize=8)
+    ax.set_xlabel(r"$t$ [s] (one shift per run)")
+h, l = axes.flat[0].get_legend_handles_labels()
+fig.legend(h, l, loc="lower center", ncol=3, fontsize=10, frameon=False)
 fig.suptitle(title)
-fig.tight_layout()
+fig.tight_layout(rect=(0, 0.055, 1, 1))
 save(fig, out, dpi=130)
 w = 22
 print("rms error [cm] / wave height error [%] per gauge:")
