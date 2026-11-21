@@ -117,10 +117,11 @@ stillWaterLevel 0;
 {nh_extra}
 """)
 
-# Convection of momentum. Central differencing keeps progressive waves from
-# decaying (linearUpwind loses ~12% of H = 4 cm over 8 wavelengths); bores
-# need a TVD scheme, so breaking cases use limitedLinearV (~3% loss).
-CONV = "Gauss linear"
+# Convection of momentum: a TVD scheme. linearUpwind loses ~12% of H = 4 cm
+# over 8 wavelengths, limitedLinearV ~3%; central differencing (Gauss linear)
+# loses least but lets grid-scale noise grow in long nonlinear runs (the
+# bar cases failed after 50-60 s), and bores need a TVD scheme anyway.
+CONV = "Gauss limitedLinearV 1"
 CONV_BREAKING = "Gauss limitedLinearV 1"
 
 
@@ -410,7 +411,7 @@ if __name__ == "__main__":
     print(standing_case(case, kh, nl))
 
 
-def bar_case(case, nLayers=10, dx=0.02, dt=0.01, endTime=50.0, H=0.02, T=2.02,
+def bar_case(case, nLayers=10, dx=0.02, dt=0.005, endTime=50.0, H=0.02, T=2.02,
              waves=True, sigmaMax=20.0, writeEvery=None, breaking=None, conv=None,
              zgrade=1.0):
     """Luth et al. (1994) / Beji & Battjes (1993) submerged bar, case A

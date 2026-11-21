@@ -109,11 +109,11 @@ The wave front then travels as a bore. The conservative momentum equation
 with a TVD convection scheme dissipates its energy.
 
 **Convection.** The tutorials and validation cases convect momentum with
-central differencing (`Gauss linear`). Upwind-biased schemes damp
-progressive waves:
-over 8 wavelengths, H = 4.1 cm drops by 12% with `linearUpwind` and by 1.6%
-with `Gauss linear` (see *Verification*). Bores need a TVD scheme, so cases
-with breaking use `Gauss limitedLinearV 1` (3% over the same distance).
+the TVD scheme `Gauss limitedLinearV 1`. Over 8 wavelengths, waves of
+H = 4.1 cm lose 3% of their height with it, 12% with `linearUpwind` and 1.6%
+with central differencing (see *Verification*). Central differencing is not
+robust, though: in the bar cases grid-scale noise grows behind the bar and
+the runs fail after 50–60 s. Bores need a TVD scheme anyway.
 
 ---
 
@@ -258,8 +258,7 @@ You also need `constant/g` (along −z), `transportProperties` and
 ddtSchemes { default backward 1; }        // "1" = ddtPhiCoeff
 divSchemes
 {
-    div(phi,U)  Gauss linear;             // non-breaking waves
- // div(phi,U)  Gauss limitedLinearV 1;   // with breaking (bores)
+    div(phi,U)  Gauss limitedLinearV 1;   // TVD
 }
 ```
 
@@ -268,9 +267,14 @@ and waves are visibly damped. In our standing-wave test, amplitude loss went
 from 3.9% to 0.09% over 4.5 periods once the coefficient was set. NHFoam
 prints a warning if it is missing. Euler works, but it is far too
 dissipative for wave propagation. Upwind-biased convection (`linearUpwind`,
-`LUST`) damps progressive waves of moderate steepness; with breaking,
-central differencing produces grid-scale oscillations behind the bores and
-the run fails, so use a TVD scheme there.
+`LUST`) damps progressive waves of moderate steepness. Central
+differencing (`Gauss linear`) damps least, but grid-scale noise grows in
+long nonlinear runs and behind bores, and the runs fail.
+
+**Time step.** Resolve the shortest wave that matters, not only the peak
+period. Behind the submerged bar, halving Δt to 5 ms (T/400 in case A,
+T/200 in case C) cut the rms error by 40% and 60%, because the free higher
+harmonics there have periods of T/2 and T/3 (see 5.4).
 
 **`system/fvSolution`, PIMPLE:**
 
@@ -317,7 +321,27 @@ matplotlib's own Computer Modern.
 
 ---
 
-## 5. Verification
+## 5. Verification and comparison with NHWAVE and REEF3D::NHFLOW
+
+Where possible, the benchmarks below were also run with two established
+non-hydrostatic σ-layer models, on the same set-up: the same domain, bottom,
+gauges, horizontal spacing and number of layers. Each model keeps its own
+numerics and its usual wave input.
+
+| | NHFoam | NHWAVE | REEF3D::NHFLOW |
+|---|---|---|---|
+| version | this repository | `JimKirby/NHWAVE` master (1483007), MPI + HYPRE 3.2 | 26.08 (conda-forge build) |
+| vertical pressure | cell centres | layer interfaces (σ-levels) | as distributed |
+| momentum advection, time | `limitedLinearV` (TVD), BDF2 | HLPA TVD, 2nd-order Runge–Kutta | WENO reconstruction, HLL fluxes (defaults) |
+| time step (bar) | fixed, 5 ms | adaptive, CFL 0.5 (≈ 4.6 ms) | adaptive, CFL 1 (≈ 9.7 ms) |
+| wave input (bar) | 8 m relaxation zone, linear | linear, at the left boundary | 8 m relaxation zone, linear |
+| absorption (bar) | 8 m sponge | 8 m sponge | 8 m relaxation zone |
+
+`validation/other_models.py` writes their input files and reads their gauge
+output, and the plotting scripts accept `nhwave:<dir>` and `reef3d:<dir>`
+next to NHFoam cases. REEF3D::NHFLOW has no slide model, so the landslide
+runs are NHFoam and NHWAVE only. SWASH could not be included: its only
+download site was not reachable from the build machine.
 
 ### 5.1 Basic checks
 
@@ -325,7 +349,7 @@ matplotlib's own Computer Modern.
 |---|---|
 | Still water over the bar bathymetry (1:20 and 1:10 slopes), 10 s | max\|U\| = 0, η ≡ 0 (exact) |
 | Volume conservation, closed basins | 10⁻¹⁸ (2DV) to 10⁻¹² (3D) m³ |
-| Standing wave, kh = 1, 10 layers, T/Δt = 200 | period +0.13%, amplitude −0.07% over 4.5 T |
+| Standing wave, kh = 1, 10 layers, T/Δt = 200 | period +0.13%, amplitude −0.03% over 4.5 T |
 | Solitary wave, H/h = 0.1, 10 layers | speed 3.282 m/s vs √(g(h+H)) = 3.285; height −0.4% from x = 10 to 30 m |
 | Circular basin, 3D unstructured prisms, 8 layers | period +0.21% vs analytical Bessel mode; mode shape (cos 45°) 0.710 vs 0.707 |
 | Serial vs 2-processor run (solitary wave) | max \|Δη\| = 1.7·10⁻⁸ m |
@@ -364,6 +388,19 @@ little for long ones. Period error, standing waves:
 Part of the error at kh = 1 (about 0.07%) comes from Δx and Δt, not from the
 layers. `validation/run_grading_study.sh` reproduces the table.
 
+![dispersion_models](doc/figures/dispersion_models.png)
+
+**Against NHWAVE** (same basins, 64 cells per wavelength, T/Δt = 200,
+uniform layers). NHWAVE keeps the period error within 0.5% for kh ≤ 7 with 3
+layers (0.13% with 2 layers at kh = 5). For 0.5%, NHFoam needs 5 layers at
+kh = 1 and 20 at kh = 3–5. The difference is the vertical arrangement:
+NHWAVE solves for the pressure on the layer interfaces, with p = 0 exactly
+at the surface, the layout of SWASH's Keller box. NHFoam's pressure is
+cell-centred. NHWAVE damps more: after 4.5 periods it has lost 0.6–12% of
+the amplitude with 3 layers and 0.6–3.5% with 10, against 0.1–3.6% and
+0.1–1.9% for NHFoam. An interface pressure arrangement is the main item on
+the roadmap.
+
 ### 5.3 Convection and the decay of progressive waves
 
 ![flume](doc/figures/flume_convection.png)
@@ -372,9 +409,10 @@ Waves of H = 4.1 cm and T = 1.01 s in 0.4 m of water (kh = 1.69, 10 layers,
 Δx = 2 cm) lose 12% of their height over 12 m (8 wavelengths) with
 `linearUpwind`, 6% with `LUST`, 3% with `limitedLinearV` and 1.6% with
 central differencing. Waves of H = 0.4 cm lose 2.5% even with
-`linearUpwind`, so the damping grows with steepness. The default is now
-central differencing. The waves leave the wave-making zone about 3% higher
-than the linear target, a nonlinear effect of generating them with linear
+`linearUpwind`, so the damping grows with steepness. Central differencing
+damps least, but over longer runs it fails (5.4), so the default is
+`limitedLinearV`. The waves leave the wave-making zone about 3% higher than
+the linear target, a nonlinear effect of generating them with linear
 theory.
 
 The phase speed is 0.6% below linear theory at kh = 1.69 with 10 uniform
@@ -383,30 +421,52 @@ from the BDF2 time step.
 
 ### 5.4 Submerged bar (Luth et al. 1994)
 
-![bar](doc/figures/submerged_bar.png)
-![barC](doc/figures/submerged_bar_caseC.png)
+![bar](doc/figures/bar_models_A.png)
+![barC](doc/figures/bar_models_C.png)
 
-10 layers, Δx = 2 cm. One time shift, fitted at x = 22 m, is applied to all
-gauges. Wave heights (max − min over the record, the four lab periods):
+All three models: Δx = 2 cm and 10 uniform layers. NHFoam runs 65 s with
+`limitedLinearV` and Δt = 5 ms; NHWAVE and REEF3D::NHFLOW run 50 s, by which
+time their records behind the bar are steady. The comparison window is the
+end of each run, and one time shift, fitted at x = 22 m, is applied to all
+gauges of a run. ΔH is the error of max − min over the lab record.
 
-| | case A (H = 2 cm, T = 2.02 s) | case C (H = 4.1 cm, T = 1.01 s) |
-|---|---|---|
-| mean \|ΔH\|/H, `linearUpwind` | 8.8% | 22.8% |
-| mean \|ΔH\|/H, central | 8.9% | 7.5% |
+| | NHFoam | NHWAVE | REEF3D::NHFLOW |
+|---|---|---|---|
+| case A, rms over the 10 gauges | 0.27 cm | 0.29 cm | 0.23 cm |
+| case A, mean \|ΔH\|/H | 9.0% | 4.7% | 6.3% |
+| case C, rms over the 10 gauges | 1.19 cm | 1.02 cm | 0.92 cm |
+| case C, mean \|ΔH\|/H | 14.3% | 6.1% | 5.1% |
 
-In case C, `linearUpwind` loses 17% of the wave height before the bar and up
-to 32% behind it. Central differencing keeps the heights, although the bar
-crest at 33.5 m is 24% too high: the lab waves break slightly there, while
-the HFA onset criterion is not reached in the model.
+Up to x = 34.5 m in case A, all three models are within 0.06–0.46 cm rms of
+the measurements. NHFoam's errors there are 0.06–0.22 cm, the smallest of
+the three on the bar crest (32.5–34.5 m). Behind the bar, NHWAVE and REEF3D
+reproduce the shape of the decomposed waves better, which is again the
+dispersion of the free higher harmonics (5.2), and NHFoam's heights there
+still drift slowly at the end of the run (at 41 m from 3.2 to 2.4 cm over
+the last 10 periods).
 
-The phases drift: the best-fit time shift grows to 0.15 s at 35.7 m and
-falls back to 0.05 s at 41 m (case C). Behind the bar in case A, the free
-higher harmonics drift in phase, and the single-shift rms error grows from
-0.06–0.2 cm on the bar to 0.3–0.6 cm. This is not a horizontal or vertical
-resolution effect (20 layers or Δx = 1 cm change it by less than 0.07 cm).
-Possible causes still to check: the time referencing of the digitised data,
-spurious free harmonics from the linear wave-making zone, and a direct
-comparison with NHWAVE/FUNWAVE on the same gauges.
+Case C shows a weakness of NHFoam that shorter runs hid. Its records behind
+the bar do not settle: at 37.3 m the wave height stays near 3.7 cm until
+57 s and then grows to 5.0 cm by 65 s, at 41 m it swings between 4.9 and
+5.7 cm (lab 3.9 cm), and after about 60 s the irregularity reaches the
+gauges in front of the bar. NHWAVE and REEF3D are periodic and within 15%
+of the lab heights at every gauge. The lab waves seem to break slightly on
+the bar crest (their height drops from 4.5 to 4.2 cm between 32.5 and
+33.5 m). The two other models dissipate the steep crests through their
+shock-capturing schemes. NHFoam runs the bar without a breaking model (with
+the HFA switched on, the onset criterion was not reached in an earlier
+run), so nothing removes that energy. A velocity-only outlet sponge did
+not change this.
+
+Two numerical settings matter as much as the model:
+- **Time step.** With Δt = 10 ms instead of 5 ms, NHFoam's single-shift rms
+  error was 65% higher in case A and 150% higher in case C (central
+  differencing, same 50 s windows). The free third harmonic behind the bar
+  (T/3 = 0.34 s in case C) gets only 34 steps per period with Δt = 10 ms,
+  and the phase error of BDF2 grows with the square of Δt/T.
+- **Convection.** Central differencing failed after 62 s (case A) and 53 s
+  (case C) with Δt = 5 ms; `limitedLinearV` runs to the end. `linearUpwind`
+  loses 17% of the wave height before the bar in case C.
 
 The bar measurements (digitised) are in the FUNWAVE-TVD benchmark
 repository, `fengyanshi/BENCHMARK_FUNWAVE/car_luth_AC/lab_data`, and are not
@@ -421,28 +481,33 @@ rises by ζ₀ = 0.5 mm in h = 5 cm of water with the exponential history
 (t_c = 0.1 s). With 5 layers and Δx = 5 mm, the peaks at x/b = 0–20 are within
 1% of linear potential theory, and the dispersive tail follows it.
 
-![landslide](doc/figures/landslide_enet_grilli.png)
+![landslide](doc/figures/landslide_models.png)
 
 **3D rigid landslide** (Enet & Grilli 2007, NTHMP benchmark 2, d = 61 mm).
-Half tank, symmetry wall on the axis, Δx = Δy = 2.5 cm (141 000 cells),
-2 processors, about 10 min for 4 s. The domain starts 0.2 m from the
-shoreline (no wetting and drying). No time shift is applied.
+Half tank, symmetry wall on the axis. NHFoam: Δx = Δy = 2.5 cm, 5 layers
+(141 000 cells), 2 processors, about 10 min for 4 s; the domain starts 0.2 m
+from the shoreline (no wetting and drying). NHWAVE: its own benchmark set-up
+(`examples/landslide_benchmarks/BM2_enet_grilli`: Δx = 2 cm, 3 layers, full
+beach), with the gauges moved to the published positions. No time shift is
+applied.
 
-| gauge | first trough, lab / 5 uniform / 5 graded (0.25) layers | first crest |
+| gauge | first trough, lab / NHFoam / NHFoam graded / NHWAVE [mm] | first crest [mm] |
 |---|---|---|
-| g2 (1.469, 0.35) | −13.7 / −14.8 / −14.8 mm | 15.0 / 15.4 / 16.9 mm |
-| g3 (1.929, 0) | −17.0 / −18.3 / −18.8 mm | 22.2 / 23.0 / 25.3 mm |
-| g4 (1.919, 0.5) | −9.4 / −9.4 / −9.4 mm | 11.0 / 11.7 / 12.4 mm |
+| g2 (1.469, 0.35) | −13.7 / −14.9 / −14.9 / −14.9 | 15.0 / 15.2 / 16.8 / 16.3 |
+| g3 (1.929, 0) | −17.0 / −18.0 / −18.7 / −17.1 | 22.2 / 22.5 / 24.9 / 20.5 |
+| g4 (1.919, 0.5) | −9.4 / −9.5 / −9.4 / −9.6 | 11.0 / 11.6 / 12.4 / 12.3 |
 
-The leading trough and crest arrive on time and are within 0–14% of the
-measurements. The trailing waves are too large, and with uniform layers
-too slow. Surface-refined layers correct their phase but not their size,
-which is also affected by the wall that replaces the beach. The lab records
-are in `JimKirby/NHWAVE`, `examples/landslide_benchmarks/BM2_enet_grilli`.
+NHFoam gets the leading trough and crest within 9% (13% with graded
+layers), NHWAVE within 12%. NHFoam has them on time, NHWAVE about 0.05 t₀ early.
+The trailing waves are where they differ: NHWAVE follows the measured phase
+and decay, while NHFoam's trailing waves are too large and, with uniform
+layers, too slow. That is the dispersion difference of 5.2 again: these
+waves have kh = 3–5. The wall that replaces NHFoam's beach also affects them
+after t/t₀ ≈ 1.5. The lab records are in the same NHWAVE example folder.
 
 ### 5.6 Breaking
 
-![breaking](doc/figures/hansen_svendsen_spilling.png)
+![breaking](doc/figures/hansen_svendsen_models.png)
 
 **Spilling breakers** (Hansen & Svendsen 1979, test 061071): T = 1.67 s,
 H = 6.9 cm at the toe of a 1:34.26 slope from h = 0.36 m. 10 layers,
@@ -467,11 +532,23 @@ are up to 17% too high near the toe, partly because linear generation of
 these waves (Ursell number 12) leaves spurious free harmonics. A later
 onset (α = 0.8) makes the comparison worse (rms 1.3 cm).
 
-The mean water level is not reproduced. There is no beach to hold the setup,
-the wave-making zone fixes the mean level offshore, and the shoaling zone
-shows a 2 mm offset. With a full sponge (η relaxed to zero) on the shelf,
-water drains out through the sponge until the shelf dries and the run
-fails after 37 periods; the velocity-only sponge keeps the volume.
+**REEF3D::NHFLOW** on the same case, with the full beach (it has wetting and
+drying), 10 layers, Δx = 2.5 cm, an 8 m linear wave zone and its breaking
+algorithm (`A 550 1`, onset parameter 0.6), breaks too early instead:
+largest H 9.4 cm at x = 6.9 m, rms 1.5 cm. Its incident waves are within 4%
+of the lab at the toe (NHFoam's are 9–17% high), and inshore of x = 8.3 m
+its heights are 18–46% low. It overpredicts the setup at the shoreline
+(14 mm at x = 11 m against 4.5 mm measured at 10.5 m). Neither model gets
+this case right with default breaking parameters: the onset is the hard
+part. NHWAVE is not included yet: our run of this case (10 layers, k–ε,
+full beach) stopped after 4 s of simulated time without an error message.
+
+NHFoam does not reproduce the mean water level. There is no beach to hold
+the setup, the wave-making zone fixes the mean level offshore, and the
+shoaling zone shows a 2 mm offset (REEF3D shows the same offset). With a
+full sponge (η relaxed to zero) on the shelf, water drains out through the
+sponge until the shelf dries and the run fails after 37 periods; the
+velocity-only sponge keeps the volume.
 
 The plunging case of the same experiments (T = 3.33 s, Ursell number 33)
 needs nonlinear wave generation. With a linear target, the incident waves
@@ -490,7 +567,8 @@ Making the HFA work needed two fixes to the first implementation:
 Bores also need a TVD convection scheme everywhere. With central
 differencing away from the breaking columns, grid-scale oscillations grow
 behind the bores and the run fails within a wave period of the first
-breaking.
+breaking. The switch is still sensitive to the time step: with Δt = 5 ms
+instead of 10 ms, the same case fails after 11 periods.
 
 ---
 
@@ -500,7 +578,8 @@ breaking.
   inundation and the wave setup at the shoreline are not possible yet;
   beaches have to end in a wall or a shelf with a sponge.
 - **Breaking (HFA) is a first version.** It ran 40 periods of spilling
-  breakers with a TVD convection scheme, but it has been tested on one case
+  breakers with a TVD convection scheme and Δt = 10 ms, but the same case
+  failed after 11 periods with Δt = 5 ms. It has been tested on one case
   only, the bore fronts are spiky, and the breaking point moves from wave to
   wave (see 5.6). Breaking columns spread only to neighbours on the same
   processor.
@@ -510,7 +589,12 @@ breaking.
   input.
 - **Restarts** do not save the BDF2 history of η or Uf. The first step after
   a restart is Euler, and the flux is rebuilt from U.
-- **Dispersion per layer** is lower than with a Keller-box layout (see 5.2).
+- **Dispersion per layer** is lower than with an interface pressure layout
+  (NHWAVE, SWASH; see 5.2).
+- **Long runs behind steep waves do not settle.** Behind the submerged bar,
+  NHFoam's wave heights keep drifting after 50–65 s, and in case C the
+  irregularity spreads up-wave (5.4). NHWAVE and REEF3D::NHFLOW stay
+  periodic on the same set-up.
 
 ## 7. Roadmap
 
@@ -518,21 +602,30 @@ Done since the first version: prescribed seabed motion (uplift, rigid
 slides), the hydrostatic front approximation, central convection,
 surface-refined layers, velocity-only sponges.
 
-1. Wetting/drying with thin-film columns and q switched off in very shallow
+The comparison with NHWAVE and REEF3D::NHFLOW (section 5) sets the order:
+
+1. Pressure on the layer interfaces (as NHWAVE and SWASH), with p = 0
+   exactly at the surface. This is what lets NHWAVE keep the period error
+   within 0.5% with 2–3 layers where NHFoam needs 10–20, and it is behind
+   the better trailing waves of the landslide and the better wave shapes
+   behind the bar.
+2. Steady long runs: volume-conserving wave-making zones (with a return
+   current for the Stokes drift, as NHWAVE's boundary wavemaker) and
+   absorbing zones that do not reflect the higher harmonics.
+3. Wetting/drying with thin-film columns and q switched off in very shallow
    water, so that beaches, runup and setup can be modelled.
-2. Breaking: upwinded face depths (or a small eddy viscosity) at the bore
-   fronts, a kinematic B = u/c onset trigger, and stabilised k–ω
-   (Larsen & Fuhrman 2018) for many-layer runs.
-3. Nonlinear wave generation (stream function, cnoidal) and irregular
+4. Breaking: a more robust switch between hydrostatic and non-hydrostatic
+   columns (it is sensitive to Δt), upwinded face depths or a small eddy
+   viscosity at the bore fronts, a kinematic B = u/c onset trigger, and
+   stabilised k–ω (Larsen & Fuhrman 2018) for many-layer runs.
+5. Nonlinear wave generation (stream function, cnoidal) and irregular
    spectra in the relaxation zones; a boundary wavemaker.
-4. Interface (Keller-box) vertical pressure arrangement, for fewer layers.
-5. Depth-integrated granular slides on a finite-area mesh for landslide
+6. Depth-integrated granular slides on a finite-area mesh for landslide
    tsunamis (NTHMP benchmarks 4–5).
-6. One-way, then two-way, coupling to interFoam/sedInterFoam relaxation
+7. One-way, then two-way, coupling to interFoam/sedInterFoam relaxation
    zones.
-7. Hybrid meshes: a fixed body-fitted region around structures, with σ-layers
-   only near the surface.
-8. Porous media (Darcy–Forchheimer fvModel).
+8. Hybrid meshes: a fixed body-fitted region around structures, with σ-layers
+   only near the surface; porous media (Darcy–Forchheimer fvModel).
 
 ## 8. References
 

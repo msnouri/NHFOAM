@@ -2,7 +2,8 @@
 """NTHMP landslide benchmark 2 (Enet & Grilli 2007, d = 61 mm): NHFoam gauges
 vs lab data.
 
-usage: plot_enet_grilli.py <labFile> <out.png> <case>[:label] [<case>[:label] ...]
+usage: plot_enet_grilli.py <labFile> <out.png> [kind:]<case>[:label] ...
+    kind = nhfoam (default) | nhwave   (see other_models.py)
 (also writes out.pdf)
 
 Lab data: JimKirby/NHWAVE, examples/landslide_benchmarks/BM2_enet_grilli/d61
@@ -13,12 +14,12 @@ import sys, os, numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
+import other_models as om
 
 use_latex(10)
 
 labfile, out = sys.argv[1:3]
-cases = [(c.split(":")[0], c.split(":")[1] if ":" in c else os.path.basename(c))
-         for c in sys.argv[3:]]
+runs = [om.parse_case(c) for c in sys.argv[3:]]
 lab = np.loadtxt(labfile)
 b, ut, a0 = 0.395, 1.70, 1.12
 t0 = ut / a0
@@ -33,16 +34,27 @@ panels = [("g2", 1, r"$g_2$: $(x, y) = (1.469, 0.35)$ m"),
           ("g4", 3, r"$g_4$: $(x, y) = (1.919, 0.5)$ m")]
 fig, axes = plt.subplots(len(panels) + 1, 1, figsize=(7.5, 9.5), sharex=True)
 report = []
-for (case, label), col in zip(cases, cols):
-    fn = os.path.join(case, "postProcessing/gauges/0/eta.dat")
-    d = np.loadtxt(fn, comments="#")
-    names = [l.split()[1] for l in open(fn) if l.startswith("# g")]
-    t = d[:, 0]
-    axes[0].plot(t / t0, d[:, names.index("g1") + 1] / b, "-", color=col, lw=1.5, label=label)
+styles = ["-", "--", "-.", ":"]
+
+
+def gauges(kind, case):
+    """Time and {g1..g4: eta} for an NHFoam or NHWAVE run."""
+    if kind == "nhfoam":
+        fn = os.path.join(case, "postProcessing/gauges/0/eta.dat")
+        d = np.loadtxt(fn, comments="#")
+        names = [l.split()[1] for l in open(fn) if l.startswith("# g")]
+        return d[:, 0], {n: d[:, i + 1] for i, n in enumerate(names)}
+    t, e = om.read_nhwave(case, ["g1", "g2", "g3", "g4"])
+    return t, e
+
+
+for (kind, case, label), col, ls in zip(runs, cols, styles):
+    t, eg = gauges(kind, case)
+    axes[0].plot(t / t0, eg["g1"] / b, ls, color=col, lw=1.5, label=label)
     row = [label]
     for ax, (g, k, title) in zip(axes[1:], panels):
-        e = d[:, names.index(g) + 1]
-        ax.plot(t / t0, e / b, "-", color=col, lw=1.5, label=label)
+        e = eg[g]
+        ax.plot(t / t0, e / b, ls, color=col, lw=1.5, label=label)
         m = (lab[:, 0] > 0) & (lab[:, 0] <= t[-1])
         el = np.interp(lab[m, 0], t, e)
         yl = smooth(lab[:, k] / 1000)[m]

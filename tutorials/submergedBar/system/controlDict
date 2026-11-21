@@ -21,10 +21,10 @@ startFrom       startTime;
 startTime       0;
 stopAt          endTime;
 endTime         50;
-deltaT          0.01;
+deltaT          0.005;  // T/400: the higher harmonics behind the bar need it
 
 writeControl    timeStep;
-writeInterval   500;
+writeInterval   1000;
 purgeWrite      0;
 
 writeFormat     ascii;

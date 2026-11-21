@@ -2,7 +2,8 @@
 """Hansen & Svendsen (1979): wave height and mean water level across the
 shoaling and surf zones, NHFoam vs lab data.
 
-usage: plot_hansen_svendsen.py <labFile> <T> <out.png> <case>[:label] [...]
+usage: plot_hansen_svendsen.py <labFile> <T> <out.png> [kind:]<case>[:label] [...]
+    kind = nhfoam (default) | nhwave | reef3d   (see other_models.py)
 (also writes out.pdf)
 
 Lab data: fengyanshi/BENCHMARK_FUNWAVE, car_hansen_svendsen/postprocessing/
@@ -15,11 +16,11 @@ import sys, os, numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from latex_style import use_latex, save
+import other_models as om
 
 use_latex(10)
 labfile, T, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
-cases = [(c.split(":")[0], c.split(":")[1] if ":" in c else os.path.basename(c))
-         for c in sys.argv[4:]]
+runs = [om.parse_case(c) for c in sys.argv[4:]]
 lab = np.loadtxt(labfile)
 cols = ["#1f5fa8", "#e67e22", "#2e8b57"]
 nPer = 10
@@ -40,17 +41,22 @@ def wave_stats(t, e, T):
 fig, axes = plt.subplots(3, 1, figsize=(7.5, 8.0), sharex=True,
                          gridspec_kw=dict(height_ratios=[3, 2, 1.2]))
 report = []
-for (case, label), col in zip(cases, cols):
-    fn = os.path.join(case, "postProcessing/gauges/0/eta.dat")
-    d = np.loadtxt(fn, comments="#")
-    hdr = [l.split() for l in open(fn) if l.startswith("# G")]
-    xg = np.array([float(h[2].strip("(")) for h in hdr])
-    st = np.array([wave_stats(d[:, 0], d[:, i + 1], T) for i in range(len(xg))])
-    axes[0].plot(xg, 100 * st[:, 0], "-", color=col, lw=1.6, label=label)
-    axes[1].plot(xg, 1000 * st[:, 1], "-", color=col, lw=1.6, label=label)
+styles = ["-", "--", "-.", ":"]
+for (kind, case, label), col, ls in zip(runs, cols, styles):
+    if kind == "nhfoam":
+        t, eta = om.read_nhfoam(case)
+        xg = np.array(sorted(eta))
+    else:
+        xg = np.loadtxt(os.path.join(case, "gauges_x.txt"))
+        t, eta = om.read_any(kind, case, list(xg))
+    st = np.array([wave_stats(t, eta[x], T) for x in xg])
+    axes[0].plot(xg, 100 * st[:, 0], ls, color=col, lw=1.6, label=label)
+    axes[1].plot(xg, 1000 * st[:, 1], ls, color=col, lw=1.6, label=label)
     Hm = np.interp(lab[:, 0], xg, st[:, 0])
+    Sm = np.interp(lab[:, 0], xg, st[:, 1])
     report.append((label, 100 * np.sqrt(np.mean((Hm - lab[:, 1]) ** 2)),
-                   100 * xg[np.nanargmax(st[:, 0])], 100 * np.nanmax(st[:, 0])))
+                   100 * xg[np.nanargmax(st[:, 0])], 100 * np.nanmax(st[:, 0]),
+                   1000 * np.sqrt(np.mean((Sm - lab[:, 2]) ** 2))))
 axes[0].plot(lab[:, 0], 100 * lab[:, 1], "o", ms=4, mfc="none", color="#c0392b",
              label="Hansen \\& Svendsen (1979)")
 axes[1].plot(lab[:, 0], 1000 * lab[:, 2], "o", ms=4, mfc="none", color="#c0392b")
@@ -74,4 +80,5 @@ save(fig, out, dpi=130)
 print("label: rms(H) [cm], x of max H [cm], max H [cm]; lab max H = "
       f"{100*lab[:,1].max():.2f} cm at x = {lab[np.argmax(lab[:,1]),0]:.2f} m")
 for r in report:
-    print(f"{r[0]}: rms {r[1]:.3f} cm, Hmax {r[3]:.2f} cm at x = {r[2]/100:.2f} m")
+    print(f"{r[0]}: rms {r[1]:.3f} cm, Hmax {r[3]:.2f} cm at x = {r[2]/100:.2f} m, "
+          f"rms(setup) {r[4]:.2f} mm")

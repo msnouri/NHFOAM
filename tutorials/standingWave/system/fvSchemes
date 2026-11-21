@@ -28,7 +28,7 @@ gradSchemes
 divSchemes
 {
     default         none;
-    div(phi,U)      Gauss linear;   // central: no numerical damping of waves
+    div(phi,U)      Gauss limitedLinearV 1;   // TVD: stable in long nonlinear runs
     div((nuEff*dev2(T(grad(U))))) Gauss linear;
 }
 
