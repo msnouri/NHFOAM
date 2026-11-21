@@ -36,13 +36,17 @@ Description
             p_rgh = p/rho + g z = g eta + q
         (hydrostatic part g*eta, non-hydrostatic part q).  Gravity does not
         appear explicitly and still water stays at rest on any mesh.
+      - The pressure unknowns sit, as in NHWAVE, on the layer interfaces
+        with q = 0 exactly on the free surface (pressureLocation interface,
+        the default), or at the cell centres (pressureLocation cell).
       - Semi-implicit free surface: the kinematic condition
             d(eta)/dt = phi_surface/A_h
-        is inserted in the surface condition p_rgh = g eta^{n+1}, giving a
-        Robin (mixed) condition for p_rgh on the surface patch.  Each
-        pressure solve therefore yields q and eta^{n+1} together.  No
-        gravity-wave Courant limit; Euler or backward (BDF2) in time,
-        following ddt(U).
+        is combined with the surface condition p_rgh = g eta^{n+1}: in the
+        interface layout as the equation of the surface unknown of each
+        column, in the cell layout as a Robin (mixed) condition for p_rgh
+        on the surface patch.  Each pressure solve therefore yields q and
+        eta^{n+1} together.  No gravity-wave Courant limit; Euler or
+        backward (BDF2) in time, following ddt(U).
       - Prescribed bottom motion (seabed uplift, solid slides).
       - Wave breaking with the hydrostatic front approximation (HFA).
       - Sponge and wave-making relaxation zones, wave gauges.
@@ -62,6 +66,9 @@ Description
 #include "sigmaColumns.H"
 #include "forcingZones.H"
 #include "bottomMotion.H"
+#include "interfacePressure.H"
+#include "calculatedFvPatchFields.H"
+#include "fixedFluxPressureFvPatchScalarField.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -117,7 +124,14 @@ int main(int argc, char *argv[])
             // --- Pressure corrector loop
             while (pimple.correct())
             {
-                #include "pEqn.H"
+                if (interfaceP)
+                {
+                    #include "pEqnInterface.H"
+                }
+                else
+                {
+                    #include "pEqn.H"
+                }
             }
 
             if (pimple.turbCorr())

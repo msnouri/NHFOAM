@@ -3,5 +3,7 @@ linearWave/linearWave.C
 forcingZones/forcingZones.C
 bottomMotion/bottomMotion.C
 derivedFvPatchFields/nhMovingSlipVelocity/nhMovingSlipVelocityFvPatchVectorField.C
+interfacePressure/interfacePressure.C
+interfacePressure/sigmaColumnPreconditioner.C
 
 LIB = $(FOAM_USER_LIBBIN)/libNHFOAM

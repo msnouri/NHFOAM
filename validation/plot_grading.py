@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Period error of standing waves vs kh for uniform and surface-refined layers.
 
-usage: plot_grading.py <grading.csv> <out.png>   (from run_grading_study.sh;
-also writes out.pdf)
+usage: plot_grading.py <grading.csv> <out.png> [title]   (from
+run_grading_study.sh; also writes out.pdf)
 """
 import sys, numpy as np
 import matplotlib; matplotlib.use("Agg")
@@ -26,6 +26,7 @@ for ax, nl in zip(axes, (3, 5)):
     ax.grid(alpha=0.3)
 axes[0].set_ylabel(r"period error [\%]")
 axes[0].legend()
-fig.suptitle(r"Standing waves: uniform vs surface-refined $\sigma$-layers")
+fig.suptitle(sys.argv[3] if len(sys.argv) > 3 else
+             r"Standing waves: uniform vs surface-refined $\sigma$-layers")
 fig.tight_layout()
 save(fig, sys.argv[2], dpi=150)

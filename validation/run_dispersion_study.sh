@@ -1,5 +1,6 @@
 #!/bin/bash
 # requires the OpenFOAM environment and the NHFOAM executables
+# PRESSURE=cell|interface selects the pressure layout (default interface)
 out=./dispersion.csv
 echo "kh,layers,T_lin,T_nh,ratio,amp_ratio" > $out
 run_one() {
@@ -7,7 +8,8 @@ run_one() {
   rm -rf $name
   python3 - << PY
 import sys; sys.path.insert(0,'$(dirname $(readlink -f $0))')
-import make_case
+import make_case, os
+make_case.PRESSURE = os.environ.get('PRESSURE', 'interface')
 r = make_case.standing_case('$name', $kh, $nl, Nx=64, stepsPerPeriod=200, nPeriods=5)
 open('$name/T_lin','w').write(repr(r['T']))
 PY

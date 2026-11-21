@@ -31,7 +31,14 @@ fvOptions.constrain(UEqn);
 
 if (pimple.momentumPredictor())
 {
-    solve(UEqn == -fvc::grad(p_rgh));
+    if (interfaceP)
+    {
+        solve(UEqn == -gradPPtr());
+    }
+    else
+    {
+        solve(UEqn == -fvc::grad(p_rgh));
+    }
 
     fvOptions.correct(U);
 }

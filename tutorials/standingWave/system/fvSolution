@@ -20,7 +20,7 @@ solvers
     p_rgh
     {
         solver          PCG;
-        preconditioner  DIC;
+        preconditioner  sigmaColumn;   // line solve per column (DIC in the cell layout)
         tolerance       1e-12;
         relTol          0.01;
     }

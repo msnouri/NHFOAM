@@ -23,7 +23,7 @@ runs = [om.parse_case(c) for c in sys.argv[3:]]
 lab = np.loadtxt(labfile)
 b, ut, a0 = 0.395, 1.70, 1.12
 t0 = ut / a0
-cols = ["#1f5fa8", "#e67e22", "#2e8b57"]
+cols = ["#1f5fa8", "#e67e22", "#2e8b57", "#8e44ad", "#7f8c8d"]
 
 # 5-point running mean of the lab records (as in the NHWAVE benchmark script)
 def smooth(y, n=5):
@@ -34,7 +34,7 @@ panels = [("g2", 1, r"$g_2$: $(x, y) = (1.469, 0.35)$ m"),
           ("g4", 3, r"$g_4$: $(x, y) = (1.919, 0.5)$ m")]
 fig, axes = plt.subplots(len(panels) + 1, 1, figsize=(7.5, 9.5), sharex=True)
 report = []
-styles = ["-", "--", "-.", ":"]
+styles = ["-", "--", "-.", ":", (0, (1, 1))]
 
 
 def gauges(kind, case):

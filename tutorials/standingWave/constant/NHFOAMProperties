@@ -24,6 +24,10 @@ minDepth        1e-4;
 
 stillWaterLevel 0;
 
+// Pressure unknowns on the layer interfaces, q = 0 on the free surface
+// (as NHWAVE; the default), or at the cell centres: pressureLocation cell;
+pressureLocation interface;
+
 gauges
 {
     G0      (0 0.0490874 0);

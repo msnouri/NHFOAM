@@ -92,6 +92,11 @@ boundaryField
 {wallE}{fbE}}}
 """)
 
+# Vertical location of the pressure unknowns (pressureLocation in
+# NHFOAMProperties): "interface" (layer interfaces, NHWAVE layout; default)
+# or "cell"
+PRESSURE = "interface"
+
 def constant_files(case, nu=1e-6, nh_extra=""):
     write(case, "constant/g", "uniformDimensionedVectorField", """
 dimensions      [0 1 -2 0 0 0 0];
@@ -114,6 +119,8 @@ bottomPatch     bottom;
 minDepth        1e-4;
 
 stillWaterLevel 0;
+
+pressureLocation {PRESSURE};
 {nh_extra}
 """)
 
@@ -124,6 +131,13 @@ stillWaterLevel 0;
 CONV = "Gauss limitedLinearV 1"
 CONV_BREAKING = "Gauss limitedLinearV 1"
 
+
+# Pressure solvers: the interface matrix is solved with PCG and the
+# sigmaColumn (line) preconditioner
+PSOLVER = {
+    "cell": "solver          PCG;\n        preconditioner  DIC;",
+    "interface": "solver          PCG;\n        preconditioner  sigmaColumn;",
+}
 
 def system_files(case, endTime, deltaT, writeInterval, ddt="backward 1", nCorr=3, nNonOrth=0, pTol=1e-12, extraSolver="", libs=False, conv=None):
     libsLine = 'libs            ("libNHFOAM.so");   // nhMovingSlipVelocity for utilities\n\n' if libs else ""
@@ -190,8 +204,7 @@ solvers
 {{
     p_rgh
     {{
-        solver          PCG;
-        preconditioner  DIC;
+        {PSOLVER[PRESSURE]}
         tolerance       {pTol:g};
         relTol          0.01;
     }}

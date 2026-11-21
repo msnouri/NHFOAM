@@ -349,3 +349,98 @@ volScalarField breaking
     dimensionedScalar("zero", dimless, 0),
     zeroGradientFvPatchScalarField::typeName
 );
+
+
+// Vertical location of the pressure unknowns
+//     interface : layer interfaces (sigma levels) with q = 0 exactly on the
+//                 free surface, as in NHWAVE (see interfacePressure.H);
+//                 the default
+//     cell      : cell centres, surface condition on the top faces
+const word pressureLocation
+(
+    nhProperties.getOrDefault<word>("pressureLocation", "interface")
+);
+
+if (pressureLocation != "cell" && pressureLocation != "interface")
+{
+    FatalIOErrorInFunction(nhProperties)
+        << "Unknown pressureLocation " << pressureLocation
+        << ". Valid: cell interface" << exit(FatalIOError);
+}
+
+const bool interfaceP(pressureLocation == "interface");
+
+Info<< "Pressure unknowns: "
+    << (
+           interfaceP
+         ? "layer interfaces, q = 0 on the free surface"
+         : "cell centres"
+       )
+    << nl << endl;
+
+autoPtr<interfacePressure> pIntPtr;   // interface layout
+autoPtr<volScalarField> pIPtr;        // p_rgh on the bottom interface of
+                                      // each cell
+autoPtr<volVectorField> gradPPtr;     // cell gradient of p_rgh
+scalarField psCol(gMag*etaCol);       // surface pressure g eta per column
+
+if (interfaceP)
+{
+    forAll(p_rgh.boundaryField(), patchi)
+    {
+        const fvPatchScalarField& pp = p_rgh.boundaryField()[patchi];
+
+        if (patchi != surfaceID && !pp.coupled() && pp.fixesValue())
+        {
+            FatalErrorInFunction
+                << "pressureLocation interface: patch " << pp.patch().name()
+                << " fixes p_rgh (" << pp.type() << ")." << nl
+                << "    Only flux conditions (fixedFluxPressure,"
+                << " zeroGradient) are supported on walls and bottom."
+                << exit(FatalError);
+        }
+    }
+
+    pIntPtr.reset(new interfacePressure(mesh, columns));
+
+    IOobject pIHeader
+    (
+        "pI",
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::AUTO_WRITE
+    );
+
+    if (pIHeader.typeHeaderOk<volScalarField>(true))
+    {
+        Info<< "Reading field pI\n" << endl;
+        pIPtr.reset(new volScalarField(pIHeader, mesh));
+    }
+    else
+    {
+        Info<< "Field pI (p_rgh on the bottom interface of each cell)"
+            << " initialised from p_rgh\n" << endl;
+        pIHeader.readOpt() = IOobject::NO_READ;
+        pIPtr.reset
+        (
+            new volScalarField
+            (
+                pIHeader,
+                p_rgh,
+                calculatedFvPatchScalarField::typeName
+            )
+        );
+    }
+
+    pIntPtr->cellPressure(pIPtr(), psCol, p_rgh);
+
+    gradPPtr.reset
+    (
+        new volVectorField
+        (
+            "gradP",
+            pIntPtr->grad(pIPtr(), psCol, p_rgh)
+        )
+    );
+}

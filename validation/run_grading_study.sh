@@ -9,7 +9,8 @@ run_one() {
   rm -rf $name
   python3 - << PY
 import sys; sys.path.insert(0,'$here')
-import make_case
+import make_case, os
+make_case.PRESSURE = os.environ.get('PRESSURE', 'interface')
 r = make_case.standing_case('$name', $kh, $nl, Nx=64, stepsPerPeriod=200, nPeriods=5, zgrade=$gr)
 open('$name/T_lin','w').write(repr(r['T']))
 PY

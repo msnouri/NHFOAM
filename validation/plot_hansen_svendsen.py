@@ -22,7 +22,7 @@ use_latex(10)
 labfile, T, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 runs = [om.parse_case(c) for c in sys.argv[4:]]
 lab = np.loadtxt(labfile)
-cols = ["#1f5fa8", "#e67e22", "#2e8b57"]
+cols = ["#1f5fa8", "#e67e22", "#2e8b57", "#8e44ad", "#7f8c8d"]
 nPer = 10
 
 
@@ -41,7 +41,7 @@ def wave_stats(t, e, T):
 fig, axes = plt.subplots(3, 1, figsize=(7.5, 8.0), sharex=True,
                          gridspec_kw=dict(height_ratios=[3, 2, 1.2]))
 report = []
-styles = ["-", "--", "-.", ":"]
+styles = ["-", "--", "-.", ":", (0, (1, 1))]
 for (kind, case, label), col, ls in zip(runs, cols, styles):
     if kind == "nhfoam":
         t, eta = om.read_nhfoam(case)
