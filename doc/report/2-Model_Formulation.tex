@@ -63,8 +63,12 @@ which the discrete method imposes column by column
 no-slip condition. When the bottom moves, the boundary condition
 \code{nhMovingSlipVelocity} gives the fluid the normal velocity of the bottom
 and leaves it free to slip tangentially, so that the flux through the bottom
-faces equals their swept volume. Lateral boundaries are walls, symmetry planes
-or the outer edges of relaxation zones.
+faces equals their swept volume. A quadratic bottom stress,
+$\bm{\tau}_b/\rho = C_d\,|\bm{u}_b|\,\bm{u}_b$ with $\bm{u}_b$ the velocity of
+the bottom cell and $C_d$ constant or $g n^2/D^{1/3}$ from a Manning coefficient,
+can be added. Lateral boundaries are walls, symmetry planes or the outer edges
+of relaxation zones. Moving shorelines (wetting and drying) are described in
+Section~\ref{sec:wd}.
 
 \subsection{Wave generation and absorption}
 \label{sec:zones}
@@ -79,9 +83,11 @@ $(\bm{u}_t,\eta_t)$:
 \end{equation}
 where $\chi\in[0,1]$ grows linearly from the inner edge of the zone
 (\code{start}) to its outer edge (\code{end}). Both terms are implicit. A zone of
-type \code{wave} uses a linear (Airy) wave of height $H$ and period $T$ as the
+type \code{wave} uses a regular wave of height $H$ and period $T$ as the
 target, ramped up over a time $t_{\mathrm{ramp}}$; it generates the incident
-waves and absorbs the reflected ones. A zone of type \code{sponge} has still
+waves and absorbs the reflected ones. The wave is linear (Airy), or a
+stream-function wave of any height \citep{fenton1988}, whose Fourier
+coefficients are computed beforehand (Section~\ref{sec:wd-method}). A zone of type \code{sponge} has still
 water as its target, or relaxes the velocity only (\code{relaxEta false}),
 which keeps the water volume, e.g.\ ahead of a truncated beach.
 

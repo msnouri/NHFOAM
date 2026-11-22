@@ -1,0 +1,337 @@
+\section{Wetting and drying}
+\label{sec:wd}
+
+Tests 4.5 and 4.7 of \citet{ma2012} and the surf-zone example of the NHWAVE
+repository need moving shorelines. This section describes the wetting and
+drying of \NHFOAM, which follows NHWAVE's mask and thin film
+\citep[][Section~3.4]{ma2012} but had to be adapted to the implicit free
+surface and the collocated mesh, compares the two treatments, and tests them:
+still water against a dry beach, the oscillation in a parabolic basin of
+\citet{thacker1981} and a dam break on a dry bed (verification), and the
+run-up of a breaking solitary wave \citep{synolakis1987} and the spilling
+breakers of \citet{ting1994} (validation, with NHWAVE).
+
+\subsection{Method}
+\label{sec:wd-method}
+
+\paragraph{Mask.} A dry column keeps a film of depth $D_{\min}$
+(\code{minDepth}), so $\eta = z_b + D_{\min}$. The mask is updated at the start
+of every time step from $\eta^n$, with NHWAVE's rules: a dry column floods when
+a wet neighbour has a higher surface and more than the film,
+$\eta_w > \eta_d$ and $D_w - D_{\min} > \epsilon$; a wet column dries when
+$D - D_{\min} \le \epsilon$ ($\epsilon = 10^{-6}$ m), and its surface is then
+reset to the film. A column that changes state starts from the film at both
+stored time levels, so the BDF2 time derivative sees no jump. A side face is
+open when the columns on both sides are wet. A closed face carries no flux and
+has no coefficients in the pressure matrix, and in the cell-centred pressure
+gradient it acts as a wall: each side sees its own pressure, so a dry
+neighbour exerts no force and still water stays at rest against a dry beach.
+The velocity of dry columns is held at zero by an implicit sink,
+$10^4/\Delta t$ on the diagonal of the momentum equation. The same is done in
+a wet column whose side faces are all closed (a puddle left on the beach): its
+velocity could only carry it away from the lower neighbour it floods next.
+
+\paragraph{Positivity.} The implicit pressure solve can draw more water from
+a shallow column than it holds. After the solve, the side outflows of a column
+are limited so that its surface stays at or above the film at the new level:
+with the free-surface update of \eqref{eq:bdf2}, the net side outflow may not
+exceed
+\begin{equation}
+  Q_{\max} = -\phi_{\mathrm{bottom}} - \frac{A_h}{a}\left(\eta_{\min} - \hat\eta\right),
+  \qquad \eta_{\min} = z_b + D_{\min},
+\end{equation}
+(relaxation-zone terms included in the code). The outflows of a column that
+would exceed it are scaled down by a common factor; this lowers the inflow of
+its neighbours, so the sweep is repeated until no column exceeds its limit.
+Inflows are never changed by a column's own limit and each face keeps one
+value, so volume is conserved to round-off. The only loss is the reset of a
+drying column, at most $\epsilon$ per column.
+
+\paragraph{Water depth at the side faces.} The mesh face between two columns
+has the depth of the vertical point lines at the column edge, about the mean
+of the two columns. With this centred depth the first version of the method
+moved flood fronts too slowly and let bores in thin water oscillate: a dam
+break on a dry bed advanced at 0.9 m/s where NHWAVE gives 1.25 m/s
+(Section~\ref{sec:wd-dambreak}), and the solitary wave of
+Section~\ref{sec:wd-runup} ran up to $R/d = 0.41$ instead of 0.51. As in the
+semi-implicit schemes of \citet{stelling2003b} and SWASH, the side fluxes now
+carry the water depth on the upwind side,
+\begin{equation}
+  D_f = \eta_f - z_{b,f},\qquad
+  \eta_f = \eta_C + \tfrac12\,\psi(r)\,(\eta_D - \eta_C),\qquad
+  r = \frac{2\,\bm{d}\cdot\nabla\eta_C}{\eta_D - \eta_C} - 1,
+  \label{eq:facedepth}
+\end{equation}
+where $C$ is the upwind and $D$ the downwind column, $\bm{d}$ the vector
+between their centres, $z_{b,f}$ the bottom of the face and $\psi$ a TVD
+limiter (van Leer by default; minmod, MC, or $\psi=0$ for the first-order
+upwind depth, can be chosen). Next to a column with less than two films of
+water the surface ends, and the upwind value is used. All layer fluxes of the
+face are scaled by $f = D_f/D_{\mathrm{mesh}}$: in the predicted flux
+$\phi_{\mathrm{HbyA}}$, in the implicit coefficients of the pressure matrix and
+in the convecting flux of the momentum equation. The face velocity
+$\bm{u}_f$, which carries the flux of a time step to the next one (the
+$\partial\bm{u}/\partial t$ flux correction and the flux extrapolation of
+Section~\ref{sec:time}), stays the flux divided by $f$, so it is not scaled
+twice. NHWAVE gets the same upwinding from its MUSCL reconstruction and HLL
+fluxes.
+
+\paragraph{Supercritical faces.} Where the upwind column is supercritical,
+with a depth-averaged velocity normal to the face above
+$\mathrm{Fr}_c\sqrt{gD}$ (\code{upwindFroude}, default 1), the predicted flux of
+the face is that of the upwind cell, $\bm{H}_C\cdot\bm{S}_f$, instead of the
+interpolated one. An HLL flux does the same once both wave speeds have the
+sign of the flow. Without it, the face at the tip of a run-up carries the mean
+of a fast and a slow (or resting) column. The switch must stay sharp. When the
+upwind flux was blended in below $\mathrm{Fr} = 1$, grid-scale oscillations
+grew in the subcritical part of a dam break: the interpolated flux is what
+couples pressure and velocity on the collocated mesh, and upwinding it at all
+faces next to shallow water made the solution noisy everywhere. A blend
+between $\mathrm{Fr} = 1$ and 1.5 lowered the run-up by 10\%.
+
+\paragraph{Faces opened by flooding.} In the step after a column floods, the
+predicted flux of the faces it opened may only run into it, since its film
+cannot feed the flow. Where it lies lower than the wet column, the face
+velocity is at least that of a dam break from rest at the dam,
+$\tfrac23\sqrt{g(D_w - D_{\min})}$. Without these two rules a puddle flooded its
+lower neighbour every other step without water flowing into it (the flux was
+cut to zero by the positivity limiter, and the neighbour dried again); applied
+up the slope as well, the dam-break velocity made a film creep up the whole
+beach.
+
+\paragraph{Options.} \code{hydrostaticDepth} switches the non-hydrostatic
+pressure off in columns shallower than the given depth (as the breaking
+columns of Section~\ref{sec:numhfa}). \code{bottomFriction} adds the quadratic
+stress $\bm{\tau}_b/\rho = C_d\,|\bm{u}_b|\,\bm{u}_b$ on the bottom cells,
+with a constant $C_d$ or $C_d = g n^2/D^{1/3}$ from a Manning coefficient $n$
+(it can be used without wetting and drying). The wetting and drying needs the
+interface pressure layout. The highest wet bed and the highest surface on land
+are written every step to \code{postProcessing/wettingDrying}.
+
+\paragraph{Nonlinear waves.} For the surf-zone test the relaxation zones were
+given a second target, the stream-function wave of \citet{fenton1988}: a
+Fourier series of order $N$ for $\eta$ and for the stream function, whose
+coefficients are computed beforehand (\code{validation/stream\_function.py},
+zero mass flux by default, i.e.\ with the return current of a closed flume).
+In a flat flume, $h = 0.4$ m, 10 layers and $\Delta x = 2.5$ cm, the zone made
+the wave of \citet{ting1994} ($H = 0.125$ m, $T = 2$ s, Ursell number 27)
+with $H = 0.1246$--$0.1249$ m at six gauges over 10 m, crest and trough
+within 1.4 and 1.1 mm of the theory, and no beating of free harmonics.
+
+\subsection{Comparison with NHWAVE}
+\label{sec:wd-nhwave}
+
+Table~\ref{tab:wd-features} sets the two treatments side by side; the NHWAVE
+column is read from the source (\code{update\_mask}, \code{construction},
+\code{flux\_bc} and \code{eval\_duvw} in \code{nhwave.F}). The mask and the
+closed faces are the same. The differences come from the time integration.
+NHWAVE updates the depth explicitly from Riemann fluxes, so positivity is a
+clip and the upwinding of depth and velocity is built into the HLL flux.
+\NHFOAM's surface is implicit, so the outflows must be limited after the
+solve, and the upwinding has to be added to the depth and to the predicted
+flux explicitly.
+
+\begin{table}[ht]
+\centering
+\caption{Wetting and drying in NHWAVE and \NHFOAM.}
+\label{tab:wd-features}
+\small
+\begin{tabular}{p{3.0cm}p{5.6cm}p{5.6cm}}
+\toprule
+ & NHWAVE & \NHFOAM \\
+\midrule
+mask & from $\eta^n$ at each step: flood if a wet neighbour is higher and has more than the film; dry at the film & same \\
+dry cells & $D = D_{\min}$, not updated & $\eta = z_b+D_{\min}$, velocity held at zero \\
+faces of dry cells & no mass flux; momentum flux is the wet side's hydrostatic pressure (a wall) & closed: no flux, a wall for the pressure gradient \\
+positivity & $D = \max(D, D_{\min})$ after each stage (adds water) & limiter on the outflows (conservative) \\
+depth at wet faces & MUSCL (van Leer) reconstruction of $\eta$, HLL flux & TVD (van Leer) reconstruction of $\eta$, upwind next to near-dry columns \\
+supercritical faces & HLL takes the upwind flux & predicted flux of the upwind cell \\
+newly wet faces & HLL depth diffusion, $\sim c\,\Delta D/2$ & flux only into the new column; dam-break velocity downhill \\
+puddles & spread by the HLL diffusion & held at rest until they flood a lower neighbour \\
+$q$ in thin water & solved everywhere, no correction in dry cells & solved everywhere; optional $q = 0$ below a depth \\
+breaking & shock capturing ($k$--$\epsilon$ in the surf-zone example) & hydrostatic front approximation \\
+volume & not conserved exactly (clip) & conserved; a drying column loses $\le\epsilon$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Still water and the parabolic basin}
+\label{sec:wd-thacker}
+
+Still water against a dry 1:20 beach (film 5 mm, $\Delta x = 5$ cm, 3 layers)
+stays at rest: after 10 s the largest velocity is $5\times10^{-9}$ m/s and the
+surface deviates by $3\times10^{-10}$ m.
+
+In the parabolic basin $z_b = h_0\,[(x-L/2)^2/a^2 - 1]$ of \citet{thacker1981},
+the surface stays planar and oscillates with the period
+$T = 2\pi a/\sqrt{2gh_0}$, and both shorelines move by $\pm a\beta$, with
+$\beta = B/(a\omega)$. With $a = 100$ m, $h_0 = 0.5$ m, $B = 0.5$ m/s
+($T = 200.6$ s), the basin was approximated by 80 straight segments, with
+$\Delta x = 1$ m, 3 layers, $\Delta t = 0.25$ s and a 1 mm film
+(Fig.~\ref{fig:wd-thacker}). Over two periods the rms error of the surface is
+0.3--1.5 mm (0.9 mm overall) and the largest error 7.4 mm, for a surface that
+moves by $\pm0.16$ m at the shorelines. The shorelines, taken as the centre of
+the last wet column, are within 1.7 m of the exact ones (0.8 m on average, for
+$\Delta x = 1$ m), with no drift from the first to the second period.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{wd_thacker.pdf}
+\caption{Parabolic basin of \citet{thacker1981}: surface at four times of the
+second period and the two shorelines over two periods.}
+\label{fig:wd-thacker}
+\end{figure}
+
+A narrow cell at the shoreline is a hard case. In an earlier mesh, the point
+where the depth equals the film was a block vertex, which left a column of
+0.1 m among columns of 1 m. With the TVD depth, that column kept a puddle,
+because its gradient, taken from its one open face, made the reconstruction
+of \eqref{eq:facedepth} reach the dry downwind level. The upwind depth next to
+near-dry columns removed the puddle. The errors on that mesh are still four
+times larger (rms 3 mm), and the validation meshes avoid such cells.
+
+\subsection{Dam break on a dry bed}
+\label{sec:wd-dambreak}
+
+Water of depth $h_0 = 0.1$ m is released at $x = 5$ m onto a dry, flat,
+frictionless bed ($\Delta x = 2$ cm, 3 layers, $\Delta t = 4$ ms, film 1 mm,
+hydrostatic). \citet{ritter1892}'s solution has a front that runs at
+$2\sqrt{gh_0} = 1.98$ m/s with vanishing depth. Neither model gets near it
+(Fig.~\ref{fig:wd-dambreak}): both treat the film of the dry columns as water
+at rest, which the flow has to push, and both follow the solution of
+\citet{stoker1957} for a wet bed as deep as the film, a bore of 1.7 cm moving
+at 1.23 m/s. The fronts at $t = 1$, 2 and 3 s are at 6.21, 7.59 and 8.95 m in
+\NHFOAM, 6.27, 7.53 and 8.77 m in NHWAVE (MinDep 1 mm) and 6.23, 7.47 and
+8.70 m in Stoker's solution. With the centred face depth the front of
+\NHFOAM\ moved at 0.9 m/s, behind a pile-up of water at the tip. The film
+therefore sets a lower limit to the depth of the flows that a run-up
+computation can resolve: with a 5 mm film, as in the next test, a swash
+lens of 2--3 cm is a bore over a bed that is a fifth of its depth.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{wd_dambreak.pdf}
+\caption{Dam break on a dry bed: depth and velocity at $t = 1$, 2 and 3 s.}
+\label{fig:wd-dambreak}
+\end{figure}
+
+\subsection{Breaking solitary wave on a beach (test 4.5 of Ma et al.)}
+\label{sec:wd-runup}
+
+A solitary wave of $H/d = 0.28$ in $d = 0.21$ m breaks on a 1:20 beach
+\citep{synolakis1987}, benchmark 4 of the NTHMP \citep{synolakis2008}, whose
+data give the measured profiles. The set-up is NHWAVE's example
+\code{solitary\_wave\_breaking}: toe at $x = 4$ m, the still-water shoreline at
+8.2 m, dry beach up to 11 m, $\Delta x = 2$ cm, 3 layers, a 5 mm film. Both
+models start from the solitary wave with its crest $d\,\mathrm{acosh}(\sqrt{20})/\gamma$
+offshore of the toe ($\gamma = \sqrt{3H/4d}$), from the exact solution of
+\citet{babenko1987} rather than NHWAVE's boundary wavemaker. NHWAVE's example
+runs without bottom friction (no viscous terms, free-slip bottom), and so does
+\NHFOAM\ here. \NHFOAM\ uses the hydrostatic front approximation and
+\code{limitedLinearV}, with $\Delta t = 2$ ms.
+
+The profiles (Fig.~\ref{fig:wd-runup}) agree with the measurements and with
+NHWAVE during shoaling ($t^* = t\sqrt{g/d} = 10$, 15). At breaking ($t^*=20$)
+\NHFOAM's bore is 0.04$d$ higher than NHWAVE's and the measured one. The
+uprush ($t^* = 25$, 30) and the backwash with its hydraulic jump at
+$x \approx 2.3d$ ($t^* = 50$) follow NHWAVE closely. The maximum run-up
+(Fig.~\ref{fig:wd-shoreline}) is $R/d = 0.531$ at $t^* = 42.5$, against 0.512
+at $t^* = 44$ for NHWAVE and 0.487--0.551 in the experiments with
+$H/d = 0.26$--0.30. With the first-order upwind depth it is the same, 0.531;
+with the centred depth 0.41; with $C_d = 0.006$ it is 0.464. In the backwash
+the highest wet column of \NHFOAM\ recedes more slowly than NHWAVE's, because
+thin puddles of up to a few millimetres above the film remain on the upper
+beach. NHWAVE spreads such remnants with the depth diffusion of its HLL flux,
+and its clip to the film does not conserve volume.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.88\textwidth]{wd_runup.pdf}
+\caption{Solitary wave on a 1:20 beach, $H/d = 0.28$: surface profiles against
+the measurements \citep{synolakis1987}.}
+\label{fig:wd-runup}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.9\textwidth]{wd_runup_shoreline.pdf}
+\caption{Solitary wave on a 1:20 beach: highest wet bed over time. The band
+is the range of the measured maximum run-up for $H/d = 0.26$--0.30.}
+\label{fig:wd-shoreline}
+\end{figure}
+
+The first versions of the method failed this test in instructive ways. With
+the centred depth and newly flooded columns starting from rest, the run-up was
+$R/d = 0.37$--0.41, and the swash had grid-scale oscillations of the depth:
+columns of 5 mm between columns of 5 cm, flooding and drying every step.
+Giving a flooded column the velocity of the neighbour that flooded it
+overshot to $R/d = 0.66$: a film with that velocity floods the next column in
+the next step, and it ran away to the end of the beach. The upwind face
+depth, the supercritical flux and the rules for opened faces and puddles
+removed both problems.
+
+\subsection{Spilling breakers on a 1:35 beach}
+\label{sec:wd-tk}
+
+\citet{ting1994} measured spilling breakers of $H = 0.125$ m and $T = 2$ s from
+$h = 0.4$ m on a 1:35 beach. Here $x$ is measured from the toe of the slope,
+which reproduces the measured breaking point; the still-water shoreline is
+at $x = 14$ m. \NHFOAM\ makes stream-function waves in a 3.8 m relaxation zone,
+2.2 m ahead of the toe, and runs onto dry land up to $x = 17$ m: 10 layers,
+$\Delta x = 2.5$ cm, $\Delta t = 5$ ms, a 5 mm film, $C_d = 0.006$, the
+hydrostatic front approximation with $\alpha = 0.6$ and $\beta = 0.3$. NHWAVE
+runs its example \code{tingkirby}, with 20 layers, the $k$--$\epsilon$ model, a
+cnoidal wave at the boundary and a 2 cm film. Its bed has the toe 5.6 m from
+the wavemaker, so its $x$ is shifted by 5.6 m. Both runs last 60 s, and the
+statistics use the last 10 periods (Fig.~\ref{fig:wd-tk},
+Table~\ref{tab:wd-tk}).
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.9\textwidth]{tk_spilling.pdf}
+\caption{Spilling breakers \citep{ting1994}: crest and trough relative to the
+mean level, wave height and mean water level.}
+\label{fig:wd-tk}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\caption{Spilling breakers: wave height and mean water level (cm).}
+\label{tab:wd-tk}
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & lab & \NHFOAM & \NHFOAM, $\beta = 0.1$ & NHWAVE \\
+\midrule
+$H$ at $x = -0.5$ m & 12.3 & 12.3 & 12.3 & 13.1 \\
+largest $H$, at $x$ & 16.5, 6.0 m & 17.3, 6.5 m & 17.1, 6.1 m & 18.0, 6.9 m \\
+$H$ at $x = 8$ m & 9.3 & 15.4 & 13.3 & 16.1 \\
+$H$ at $x = 11$ m & 3.9 & 10.0 & 8.3 & 6.4 \\
+rms error of $H$, $x < 6$ m & & 0.5 & 0.6 & 1.4 \\
+mean error of $H$, $x > 7$ m & & $+6.1$ & $+4.2$ & $+4.8$ \\
+mean level at $x = 11$ m & 1.4 & 0.5 & 0.7 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Up to breaking \NHFOAM\ follows the measurements: the incident height is
+right, the rms error before $x = 6$ m is 0.5 cm, and the waves break 0.5 m
+later than in the flume and 0.8 cm higher. NHWAVE's waves are 0.8 cm too high
+from the start and break 0.9 m late. Inside the surf zone both models lose too
+little energy. The heights decay more slowly than the measured ones, and the
+mean level rises too late and too little. At $x = 8$ m the waves are 6 cm
+(\NHFOAM) and 7 cm (NHWAVE) higher than the measured 9.3 cm, and near the
+shoreline NHWAVE's $k$--$\epsilon$ dissipation brings its heights closer. In
+\NHFOAM\ the waves of the inner surf zone are sawtooth bores with $H/h$ near 1,
+of which only the one or two columns at the front are flagged as breaking.
+Two sensitivity runs locate the problem. Keeping columns breaking down to
+$\beta = 0.1$ flags 10--12 columns, moves the breaking point to $x = 6.1$ m
+and cuts the surf-zone error by a third. Switching $q$ off in all columns
+shallower than 0.23 m (\code{hydrostaticDepth}) leaves +2.8 cm, and three
+layers instead of ten change nothing (+6.3 cm). The core scheme captures
+hydrostatic bores: a dam break onto a 2 cm bed gives the height and speed of
+Stoker's bore within about 1\%. What is missing is dissipation where the
+non-hydrostatic pressure acts behind the flagged front.
+The upwind face depth did not change this. The test confirms the limitation
+found with the breakers of \citet{hansen1979} (Section~\ref{sec:breaking}),
+now with a full beach, set-up and NHWAVE alongside.

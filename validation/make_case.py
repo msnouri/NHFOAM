@@ -294,14 +294,39 @@ boundary
 );
 """)
 
-def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0, Ny=1, ygrade=1.0):
+def beach_profile(xs, hs, film, dx=None):
+    """Profile with dry ground (hs < 0: bed above the still water level):
+    inserts the point where the depth equals the film and returns
+    (xs, hs, ztop) with the mesh top at max(0, z_b + film), so that the
+    dry columns start with the film (wettingDrying).  With dx given, the
+    point is not inserted closer than dx to a vertex (no narrow block; the
+    solver puts the surface points in place at the start anyway)."""
+    X, H = [xs[0]], [hs[0]]
+    for i in range(1, len(xs)):
+        h0, h1 = hs[i - 1], hs[i]
+        if (h0 - film) * (h1 - film) < 0:
+            t = (h0 - film) / (h0 - h1)
+            xi = xs[i - 1] + t * (xs[i] - xs[i - 1])
+            if dx is None or min(xi - xs[i - 1], xs[i] - xi) >= dx:
+                X.append(xi)
+                H.append(film)
+        X.append(xs[i]); H.append(h1)
+    ztop = [max(0.0, -h + film) for h in H]
+    return X, H, ztop
+
+
+def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0, Ny=1, ygrade=1.0,
+                      ztop=None):
     """Piecewise-linear bottom: depth hs[i] at xs[i], one block per segment.
     Ny = 1: 2D (empty frontAndBack, width dy). Ny > 1: 3D channel of width
-    dy with walls 'axis' (y = 0) and 'side' (y = dy)."""
+    dy with walls 'axis' (y = 0) and 'side' (y = dy). ztop: top of the
+    mesh per point (default 0; see beach_profile for dry ground)."""
+    if ztop is None:
+        ztop = [0.0] * len(xs)
     verts = []
-    for i, (x, h) in enumerate(zip(xs, hs)):
+    for i, (x, h, zt) in enumerate(zip(xs, hs, ztop)):
         verts += [f"({x:.10g} 0 {-h:.10g})", f"({x:.10g} {dy} {-h:.10g})",
-                  f"({x:.10g} 0 0)", f"({x:.10g} {dy} 0)"]
+                  f"({x:.10g} 0 {zt:.10g})", f"({x:.10g} {dy} {zt:.10g})"]
     blocks, surf, bot = [], [], []
     for i in range(len(xs) - 1):
         a = 4 * i; b = 4 * (i + 1)

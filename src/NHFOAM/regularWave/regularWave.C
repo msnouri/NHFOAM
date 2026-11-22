@@ -15,13 +15,13 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "linearWave.H"
+#include "regularWave.H"
 #include "mathematicalConstants.H"
 #include "error.H"
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::linearWave::linearWave
+Foam::regularWave::regularWave
 (
     const dictionary& dict,
     const scalar g,
@@ -38,7 +38,9 @@ Foam::linearWave::linearWave
     direction_(dict.getOrDefault<vector>("direction", vector(1, 0, 0))),
     origin_(dict.getOrDefault<point>("origin", point::zero)),
     omega_(constant::mathematical::twoPi/T_),
-    k_(waveNumber(omega_, h_, g_))
+    k_(waveNumber(omega_, h_, g_)),
+    streamFunction_(false),
+    uMean_(0)
 {
     direction_.z() = 0;
 
@@ -50,12 +52,36 @@ Foam::linearWave::linearWave
     }
 
     direction_ /= mag(direction_);
+
+    const word theory(dict.getOrDefault<word>("theory", "linear"));
+
+    if (theory == "streamFunction")
+    {
+        streamFunction_ = true;
+        k_ = dict.get<scalar>("waveNumber");
+        uMean_ = dict.get<scalar>("uMean");
+        E_ = dict.get<scalarList>("etaCoeffs");
+        B_ = dict.get<scalarList>("psiCoeffs");
+
+        if (E_.size() != B_.size() + 1)
+        {
+            FatalIOErrorInFunction(dict)
+                << "etaCoeffs needs one entry (E_0) more than psiCoeffs"
+                << exit(FatalIOError);
+        }
+    }
+    else if (theory != "linear")
+    {
+        FatalIOErrorInFunction(dict)
+            << "theory " << theory << " unknown; use linear or streamFunction"
+            << exit(FatalIOError);
+    }
 }
 
 
 // * * * * * * * * * * * * * * * Static Functions  * * * * * * * * * * * * * //
 
-Foam::scalar Foam::linearWave::waveNumber
+Foam::scalar Foam::regularWave::waveNumber
 (
     const scalar omega,
     const scalar h,
@@ -86,9 +112,17 @@ Foam::scalar Foam::linearWave::waveNumber
 }
 
 
+// * * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * //
+
+Foam::scalar Foam::regularWave::theta(const point& x, const scalar t) const
+{
+    return k_*((x - origin_) & direction_) - omega_*t + phase_;
+}
+
+
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-Foam::scalar Foam::linearWave::ramp(const scalar t) const
+Foam::scalar Foam::regularWave::ramp(const scalar t) const
 {
     if (rampTime_ <= 0 || t >= rampTime_)
     {
@@ -103,24 +137,54 @@ Foam::scalar Foam::linearWave::ramp(const scalar t) const
 }
 
 
-Foam::scalar Foam::linearWave::eta(const point& x, const scalar t) const
+Foam::scalar Foam::regularWave::eta(const point& x, const scalar t) const
 {
-    const scalar arg = k_*((x - origin_) & direction_) - omega_*t + phase_;
+    const scalar th = theta(x, t);
 
-    return ramp(t)*0.5*H_*Foam::cos(arg);
+    if (streamFunction_)
+    {
+        scalar e = 0;
+        forAll(E_, j)
+        {
+            e += E_[j]*Foam::cos(j*th);
+        }
+        return ramp(t)*e;
+    }
+
+    return ramp(t)*0.5*H_*Foam::cos(th);
 }
 
 
-Foam::vector Foam::linearWave::velocity(const point& x, const scalar t) const
+Foam::vector Foam::regularWave::velocity(const point& x, const scalar t) const
 {
-    const scalar arg = k_*((x - origin_) & direction_) - omega_*t + phase_;
+    const scalar th = theta(x, t);
 
     // Height above the bottom, limited to the water column
     const scalar zb = max(x.z() - swl_ + h_, 0);
-    const scalar a = 0.5*H_*omega_/Foam::sinh(k_*h_);
 
-    const scalar u = a*Foam::cosh(k_*zb)*Foam::cos(arg);
-    const scalar w = a*Foam::sinh(k_*zb)*Foam::sin(arg);
+    scalar u = 0, w = 0;
+
+    if (streamFunction_)
+    {
+        u = uMean_;
+
+        forAll(B_, i)
+        {
+            const label j = i + 1;
+            const scalar jk = j*k_;
+            const scalar ch = Foam::cosh(jk*h_);
+
+            u += jk*B_[i]*Foam::cosh(jk*zb)/ch*Foam::cos(j*th);
+            w += jk*B_[i]*Foam::sinh(jk*zb)/ch*Foam::sin(j*th);
+        }
+    }
+    else
+    {
+        const scalar a = 0.5*H_*omega_/Foam::sinh(k_*h_);
+
+        u = a*Foam::cosh(k_*zb)*Foam::cos(th);
+        w = a*Foam::sinh(k_*zb)*Foam::sin(th);
+    }
 
     return ramp(t)*(u*direction_ + vector(0, 0, w));
 }

@@ -31,9 +31,12 @@ The present version has
   \item wave generation and absorption in relaxation zones;
   \item prescribed seabed motion (bottom uplift, rigid landslides);
   \item depth-induced breaking with the hydrostatic front approximation
-        \citep{smit2013}.
+        \citep{smit2013};
+  \item wetting and drying with a thin film on dry columns, after NHWAVE,
+        with a conservative positivity limiter and upwind face depths;
+  \item linear or stream-function \citep{fenton1988} target waves and
+        quadratic bottom friction.
 \end{itemize}
-It has no wetting and drying yet.
 
 This report documents the model and collects its verification and validation.
 Section~\ref{sec:model} gives the equations and Section~\ref{sec:numerics} the
@@ -45,5 +48,8 @@ submerged bar, seabed motion and breaking, with NHWAVE and REEF3D::NHFLOW
 test programme of \citet{ma2012}, the paper that introduced NHWAVE, case by
 case and against NHWAVE only. It starts from the simplest benchmarks, uses
 each one to find and fix weaknesses of \NHFOAM, and states what the fixes
-changed. Section~\ref{sec:conclusions} lists the limitations and the plans.
+changed. Section~\ref{sec:wd} describes the wetting and drying, compares it
+with NHWAVE's and tests it, from still water on a beach to the run-up of a
+breaking solitary wave and spilling breakers in a surf zone.
+Section~\ref{sec:conclusions} lists the limitations and the plans.
 Appendix~\ref{app:usage} explains how to build the code and set up a case.

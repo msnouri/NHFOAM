@@ -101,7 +101,12 @@ Foam::interfacePressure::interfacePressure
     cf_(mesh.nInternalFaces(), 0),
     cfB_(mesh.boundary().size()),
     corr_(mesh.nInternalFaces(), 0),
-    corrB_(mesh.boundary().size())
+    corrB_(mesh.boundary().size()),
+    faceOpenPtr_(nullptr),
+    patchFaceOpenPtr_(nullptr),
+    faceFactorPtr_(nullptr),
+    patchFaceFactorPtr_(nullptr),
+    nLimited_(0)
 {
     const label nCells = mesh.nCells();
     const labelListList& colCells = columns.columnCells();
@@ -513,14 +518,23 @@ Foam::solverPerformance Foam::interfacePressure::solve
             continue;
         }
 
+        // Closed face (wetting and drying): no flux
+        if (faceOpenPtr_ && !(*faceOpenPtr_)[facei])
+        {
+            cf_[facei] = 0;
+            corr_[facei] = 0;
+            continue;
+        }
+
         const label o = own[facei];
         const label n = nei[facei];
         const label oa = above_[o];
         const label na = above_[n];
 
-        const scalar c = rAUf[facei]*magSf[facei]*dc[facei];
+        const scalar ff = (faceFactorPtr_ ? (*faceFactorPtr_)[facei] : 1);
+        const scalar c = ff*rAUf[facei]*magSf[facei]*dc[facei];
         const scalar corr =
-            rAUf[facei]*magSf[facei]*(cv[facei] & gradPf[facei]);
+            ff*rAUf[facei]*magSf[facei]*(cv[facei] & gradPf[facei]);
         const scalar c4 = 0.25*c;
         const scalar Xh = 0.5*(phiHbyA[facei] - corr);
 
@@ -601,11 +615,22 @@ Foam::solverPerformance Foam::interfacePressure::solve
 
             forAll(fc, i)
             {
+                if (patchFaceOpenPtr_ && !(*patchFaceOpenPtr_)[patchi][i])
+                {
+                    cfp[i] = 0;
+                    corrp[i] = 0;
+                    continue;
+                }
+
                 const label o = fc[i];
                 const label oa = above_[o];
 
-                const scalar c = rAUfp[i]*magSfp[i]*dcp[i];
-                const scalar corr = rAUfp[i]*magSfp[i]*(cvp[i] & gPf[i]);
+                const scalar ff =
+                (
+                    patchFaceFactorPtr_ ? (*patchFaceFactorPtr_)[patchi][i] : 1
+                );
+                const scalar c = ff*rAUfp[i]*magSfp[i]*dcp[i];
+                const scalar corr = ff*rAUfp[i]*magSfp[i]*(cvp[i] & gPf[i]);
                 const scalar c4 = 0.25*c;
                 const scalar Xh = 0.5*(phiHp[i] - corr);
 
@@ -904,7 +929,55 @@ Foam::tmp<Foam::volVectorField> Foam::interfacePressure::grad
         }
     }
 
-    return fvc::surfaceIntegrate(mesh_.Sf()*pf);
+    tmp<volVectorField> tgrad(fvc::surfaceIntegrate(mesh_.Sf()*pf));
+
+    // Closed side faces (wetting and drying) act as walls: each side sees
+    // its own pressure, so a dry neighbour exerts no force
+    if (faceOpenPtr_)
+    {
+        vectorField& gi = tgrad.ref().primitiveFieldRef();
+        const vectorField& Sf = mesh_.Sf();
+        const scalarField& V = mesh_.V();
+
+        forAll(nei, facei)
+        {
+            if (!(*faceOpenPtr_)[facei])
+            {
+                const label o = own[facei];
+                const label n = nei[facei];
+
+                gi[o] += Sf[facei]*(pCell[o] - pfi[facei])/V[o];
+                gi[n] -= Sf[facei]*(pCell[n] - pfi[facei])/V[n];
+            }
+        }
+
+        forAll(mesh_.boundary(), patchi)
+        {
+            const fvPatch& fvp = mesh_.boundary()[patchi];
+
+            if (!fvp.coupled())
+            {
+                continue;
+            }
+
+            const labelUList& fc = fvp.faceCells();
+            const vectorField& Sfp = mesh_.Sf().boundaryField()[patchi];
+            const scalarField& pfp = pfB[patchi];
+            const boolList& open = (*patchFaceOpenPtr_)[patchi];
+
+            forAll(fc, i)
+            {
+                if (!open[i])
+                {
+                    gi[fc[i]] += Sfp[i]*(pCell[fc[i]] - pfp[i])/V[fc[i]];
+                }
+            }
+        }
+
+        tgrad.ref().correctBoundaryConditions();
+    }
+
+    return tgrad;
 }
 
 
@@ -913,21 +986,26 @@ Foam::tmp<Foam::scalarField> Foam::interfacePressure::fluxes
     const volScalarField& pCell,
     const surfaceScalarField& phiHbyA,
     const volVectorField& U,
-    surfaceScalarField& phi
+    surfaceScalarField& phi,
+    const scalarField* etaMinPtr,
+    const scalarField* etaHatEffPtr,
+    const scalarField* colSPtr,
+    const scalar aEff
 ) const
 {
     const labelUList& own = mesh_.owner();
     const labelUList& nei = mesh_.neighbour();
     const labelListList& colCells = columns_.columnCells();
+    const labelList& cellCol = columns_.cellColumn();
+    const label nCols = columns_.nColumns();
     const label surfID = columns_.surfacePatchID();
     const label botID = columns_.bottomPatchID();
     const label botStart = mesh_.boundaryMesh()[botID].start();
 
-    // Outward side flux of every cell
-    scalarField sideOut(mesh_.nCells(), 0);
-
     scalarField& phii = phi.primitiveFieldRef();
+    surfaceScalarField::Boundary& phiB = phi.boundaryFieldRef();
 
+    // Side fluxes
     forAll(nei, facei)
     {
         if (isLayerFace_[facei])
@@ -935,20 +1013,20 @@ Foam::tmp<Foam::scalarField> Foam::interfacePressure::fluxes
             continue;
         }
 
+        if (faceOpenPtr_ && !(*faceOpenPtr_)[facei])
+        {
+            phii[facei] = 0;
+            continue;
+        }
+
         const label o = own[facei];
         const label n = nei[facei];
 
-        const scalar F =
+        phii[facei] =
             phiHbyA[facei]
           - cf_[facei]*(pCell[n] - pCell[o])
           - corr_[facei];
-
-        phii[facei] = F;
-        sideOut[o] += F;
-        sideOut[n] -= F;
     }
-
-    surfaceScalarField::Boundary& phiB = phi.boundaryFieldRef();
 
     forAll(mesh_.boundary(), patchi)
     {
@@ -974,10 +1052,15 @@ Foam::tmp<Foam::scalarField> Foam::interfacePressure::fluxes
 
             forAll(fc, i)
             {
-                const label o = fc[i];
-
-                phip[i] = phiHp[i] - cfp[i]*(pCnb[i] - pCell[o]) - corrp[i];
-                sideOut[o] += phip[i];
+                if (patchFaceOpenPtr_ && !(*patchFaceOpenPtr_)[patchi][i])
+                {
+                    phip[i] = 0;
+                }
+                else
+                {
+                    phip[i] =
+                        phiHp[i] - cfp[i]*(pCnb[i] - pCell[fc[i]]) - corrp[i];
+                }
             }
         }
         else
@@ -988,17 +1071,206 @@ Foam::tmp<Foam::scalarField> Foam::interfacePressure::fluxes
             forAll(fc, i)
             {
                 phip[i] = Up[i] & Sfp[i];
-
-                if (patchi != botID)
-                {
-                    sideOut[fc[i]] += phip[i];
-                }
             }
         }
     }
 
+    // Positivity limiter (wetting and drying): the side outflow of a column
+    // may not exceed
+    //     maxOut = -phi_bottom - A (colS etaMin - etaHatEff)/aEff,
+    // the outflow that leaves it at etaMin at the new time level.  The
+    // outflows of the columns above it are scaled down; this reduces the
+    // inflow of their neighbours, so the sweep is repeated.  Fluxes into a
+    // column are never changed by its own limit, and every face keeps one
+    // value, so the volume is conserved.
+    nLimited_ = 0;
+
+    if (etaMinPtr)
+    {
+        const scalarField& etaMin = *etaMinPtr;
+        const scalarField& etaHatEff = *etaHatEffPtr;
+        const scalarField& colS = *colSPtr;
+        const scalarField& Ah = columns_.columnArea();
+        const scalarField& phiBot = phiB[botID];
+        const labelList& colBot = columns_.columnBottomFace();
+
+        scalarField maxOut(nCols);
+        forAll(maxOut, col)
+        {
+            maxOut[col] =
+              - phiBot[colBot[col] - botStart]
+              - Ah[col]*(colS[col]*etaMin[col] - etaHatEff[col])/aEff;
+        }
+
+        // Scale factor of the outflows per column, exchanged across
+        // processor boundaries through a cell field
+        volScalarField rCell
+        (
+            IOobject
+            (
+                "wdLimiter",
+                mesh_.time().timeName(),
+                mesh_,
+                IOobject::NO_READ,
+                IOobject::NO_WRITE,
+                false
+            ),
+            mesh_,
+            dimensionedScalar("one", dimless, 1.0),
+            calculatedFvPatchScalarField::typeName
+        );
+
+        labelHashSet limitedFaces;
+
+        for (label sweep = 0; sweep < 50; ++sweep)
+        {
+            scalarField out(nCols, 0);
+            scalarField in(nCols, 0);
+
+            auto add = [&](const label col, const scalar Fout)
+            {
+                if (Fout > 0)
+                {
+                    out[col] += Fout;
+                }
+                else
+                {
+                    in[col] -= Fout;
+                }
+            };
+
+            forAll(nei, facei)
+            {
+                if (isLayerFace_[facei] || phii[facei] == 0)
+                {
+                    continue;
+                }
+                add(cellCol[own[facei]], phii[facei]);
+                add(cellCol[nei[facei]], -phii[facei]);
+            }
+
+            forAll(mesh_.boundary(), patchi)
+            {
+                const fvPatch& fvp = mesh_.boundary()[patchi];
+
+                if (patchi == surfID || patchi == botID)
+                {
+                    continue;
+                }
+
+                const labelUList& fc = fvp.faceCells();
+                const scalarField& phip = phiB[patchi];
+
+                forAll(fc, i)
+                {
+                    add(cellCol[fc[i]], phip[i]);
+                }
+            }
+
+            scalarField r(nCols, 1);
+            label nViolating = 0;
+
+            forAll(r, col)
+            {
+                const scalar excess = (out[col] - in[col]) - maxOut[col];
+
+                if (excess > 1e-12*max(out[col], SMALL) && out[col] > 0)
+                {
+                    r[col] = max(0, min(1, (maxOut[col] + in[col])/out[col]));
+                    ++nViolating;
+                }
+            }
+
+            reduce(nViolating, sumOp<label>());
+
+            if (nViolating == 0)
+            {
+                break;
+            }
+
+            columns_.setCellValues(r, rCell.primitiveFieldRef());
+            rCell.correctBoundaryConditions();
+
+            forAll(nei, facei)
+            {
+                if (isLayerFace_[facei] || phii[facei] == 0)
+                {
+                    continue;
+                }
+
+                const label donor =
+                    cellCol[phii[facei] > 0 ? own[facei] : nei[facei]];
+
+                if (r[donor] < 1)
+                {
+                    phii[facei] *= r[donor];
+                    limitedFaces.insert(facei);
+                }
+            }
+
+            forAll(mesh_.boundary(), patchi)
+            {
+                const fvPatch& fvp = mesh_.boundary()[patchi];
+
+                if (!fvp.coupled() || patchi == surfID || patchi == botID)
+                {
+                    continue;
+                }
+
+                const labelUList& fc = fvp.faceCells();
+                scalarField& phip = phiB[patchi];
+                const scalarField rNb
+                (
+                    rCell.boundaryField()[patchi].patchNeighbourField()
+                );
+
+                forAll(fc, i)
+                {
+                    const scalar rf =
+                        phip[i] > 0 ? r[cellCol[fc[i]]] : rNb[i];
+
+                    if (rf < 1)
+                    {
+                        phip[i] *= rf;
+                        limitedFaces.insert(mesh_.nInternalFaces() + i);
+                    }
+                }
+            }
+        }
+
+        nLimited_ = returnReduce(limitedFaces.size(), sumOp<label>());
+    }
+
+    // Outward side flux of every cell
+    scalarField sideOut(mesh_.nCells(), 0);
+
+    forAll(nei, facei)
+    {
+        if (!isLayerFace_[facei])
+        {
+            sideOut[own[facei]] += phii[facei];
+            sideOut[nei[facei]] -= phii[facei];
+        }
+    }
+
+    forAll(mesh_.boundary(), patchi)
+    {
+        if (patchi == surfID || patchi == botID)
+        {
+            continue;
+        }
+
+        const labelUList& fc = mesh_.boundary()[patchi].faceCells();
+        const scalarField& phip = phiB[patchi];
+
+        forAll(fc, i)
+        {
+            sideOut[fc[i]] += phip[i];
+        }
+    }
+
     // Layer and surface fluxes: continuity integrated from the bottom
-    tmp<scalarField> tphis(new scalarField(columns_.nColumns(), 0));
+    tmp<scalarField> tphis(new scalarField(nCols, 0));
     scalarField& phis = tphis.ref();
     const scalarField& phiBot = phiB[botID];
 

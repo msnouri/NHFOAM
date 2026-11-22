@@ -39,7 +39,7 @@ Description
         origin          (10 0 0);
         direction       (1 0 0);
 
-        // linear: Airy wave at t = 0 (entries of linearWave)
+        // linear: Airy wave at t = 0 (entries of regularWave)
 
         // circularMode: eta = a J_m(k r) cos(m theta) about 'centre'
         amplitude       0.005;
@@ -55,7 +55,7 @@ Description
 
 #include "fvCFD.H"
 #include "sigmaColumns.H"
-#include "linearWave.H"
+#include "regularWave.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
         dictionary waveDict(dict);
         waveDict.set("rampTime", 0);
 
-        linearWave wave(waveDict, gMag, swl);
+        regularWave wave(waveDict, gMag, swl);
 
         forAll(etaCol, coli)
         {

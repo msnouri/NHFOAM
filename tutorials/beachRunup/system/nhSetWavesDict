@@ -1,0 +1,27 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFOAM
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      nhSetWavesDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Solitary wave of NTHMP benchmark 4 (Synolakis 1987): H/d = 0.28 on
+// d = 0.21 m, crest at L = d acosh(sqrt(20))/gamma, gamma = sqrt(3H/(4d)),
+// offshore of the toe of the 1:20 beach (x = 4 m)
+type            solitary;
+waveHeight      0.0588;
+depth           0.21;
+origin          (3.0018 0 0);
+direction       (1 0 0);
+
+// ************************************************************************* //

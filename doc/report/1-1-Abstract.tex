@@ -25,11 +25,21 @@ central differencing the standing-wave error is 0.07--0.56\%, against
 \NHFOAM\ reproduces the measured focusing on a grid four times coarser than
 the paper's, with errors at the first sections close to those of NHWAVE on
 the paper's grid, while NHWAVE on the coarse grid loses 30\% of the incident
-wave height. The main limitations are the lack of wetting and drying,
-the too weak dissipation of hydrostatic bores in the surf zone, and linear wave
-generation.
+wave height. Wetting and drying was then added, after NHWAVE's thin-film mask
+but adapted to the implicit free surface: a limiter on the outflows keeps the
+water depth positive and the volume conserved, and the side fluxes carry the
+upwind (TVD) water depth and, in supercritical flow, the upwind predicted
+flux. Still water stays at rest against a dry beach, the planar surface in
+the parabolic basin of \citet{thacker1981} is reproduced to 0.9 mm rms, and
+the breaking solitary wave of \citet{synolakis1987} runs up to $R/d = 0.531$,
+against 0.512 for NHWAVE and 0.49--0.55 in the experiments. On the spilling
+breakers of \citet{ting1994}, with stream-function wave generation, shoaling
+and the breaking point agree with the measurements, but in the surf zone both
+\NHFOAM\ and NHWAVE lose too little energy. This dissipation of the bores is
+now the main limitation.
 
 \vspace{0.5em}
 \noindent\textbf{Keywords:} non-hydrostatic model; $\sigma$-coordinate;
-OpenFOAM; NHWAVE; wave dispersion; model validation
+OpenFOAM; NHWAVE; wave dispersion; wetting and drying; wave run-up;
+model validation
 \end{abstract}

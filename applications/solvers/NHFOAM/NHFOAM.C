@@ -52,8 +52,9 @@ Description
       - Prescribed bottom motion (seabed uplift, solid slides).
       - Wave breaking with the hydrostatic front approximation (HFA).
       - Sponge and wave-making relaxation zones, wave gauges.
-
-    Not (yet) included: wetting and drying.
+      - Wetting and drying (moving shorelines) after NHWAVE: a column mask
+        with a thin film on dry columns, a positivity limiter, and side
+        fluxes with the upwind (TVD) water depth (see wettingDrying.H).
 
 \*---------------------------------------------------------------------------*/
 
@@ -69,6 +70,7 @@ Description
 #include "forcingZones.H"
 #include "bottomMotion.H"
 #include "interfacePressure.H"
+#include "wettingDrying.H"
 #include "calculatedFvPatchFields.H"
 #include "fixedFluxPressureFvPatchScalarField.H"
 

@@ -25,8 +25,9 @@ Description
         dU/dt   = ... + sigma (U_target - U)
         deta/dt = ... + sigma (eta_target - eta)
     Both terms are treated implicitly (the eta term inside the free-surface
-    condition).  Targets are the still water (type sponge) or a linear wave
-    (type wave), so a wave zone generates waves and absorbs reflected ones.
+    condition).  Targets are the still water (type sponge) or a regular
+    wave (type wave; linear or stream-function theory, see regularWave.H),
+    so a wave zone generates waves and absorbs reflected ones.
 
     The strength grows from 0 at 'start' to sigmaMax at 'end' (horizontal
     distance along end - start):
@@ -69,7 +70,7 @@ SourceFiles
 #ifndef forcingZones_H
 #define forcingZones_H
 
-#include "linearWave.H"
+#include "regularWave.H"
 #include "PtrList.H"
 #include "autoPtr.H"
 #include "vectorField.H"
@@ -96,7 +97,7 @@ class forcingZone
         scalar sigmaMax_;
         scalar exponent_;
         scalar swl_;
-        autoPtr<linearWave> wave_;
+        autoPtr<regularWave> wave_;
 
 
 public:

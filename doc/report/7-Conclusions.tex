@@ -31,20 +31,39 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         interest: the shoal run with the filtered scheme failed when the waves
         broke in a shallow corner, and ran on with \code{limitedLinearV} and
         the hydrostatic front approximation.
+  \item \textbf{Wetting and drying.} NHWAVE's mask and thin film carry over,
+        but the implicit free surface needs a limiter on the outflows (which
+        keeps the volume conserved, unlike NHWAVE's clip), and the collocated
+        mesh needs the upwind (TVD) depth at the side faces and the upwind
+        predicted flux in supercritical flow. With the centred depth of the
+        mesh faces the fronts were too slow ($R/d = 0.41$ for the solitary
+        wave); with both changes the run-up is 0.531 (NHWAVE 0.512, lab
+        0.49--0.55), still water stays at rest on a beach, and the
+        parabolic basin is reproduced to 0.9 mm rms. A dam break on a dry
+        bed showed that both models treat the film as a wet bed and follow
+        Stoker's solution for it, not Ritter's. Parallel runs give the same
+        run-up with a processor boundary in the swash zone (0.540 against
+        0.531).
 \end{itemize}
 
 \paragraph{Limitations.}
 \begin{itemize}[nosep]
-  \item \textbf{No wetting and drying.} Run-up, inundation and the setup at the
-        shoreline cannot be modelled yet; beaches must end in a wall or a
-        shelf with a sponge. Tests 4.5 and 4.7 of \citet{ma2012} wait for it.
-  \item \textbf{Breaking} has been tested on one case. The onset is right, but
-        the hydrostatic bores lose too little energy in the surf zone, where
-        the wave heights are up to twice the measured ones. Breaking columns
-        spread only to neighbours on the same processor.
-  \item \textbf{Wave generation} uses linear targets in relaxation zones only.
-        Steep or long waves carry spurious free harmonics. There is no
-        boundary wavemaker and no irregular, cnoidal or stream-function input.
+  \item \textbf{Wetting and drying} has been tested in 2DV only, with uniform
+        horizontal cells near the shoreline. The film acts as a wet bed, so
+        thin swash flows run slower than over a truly dry bed (in NHWAVE as
+        well), and puddles of a few millimetres above the film stay on the
+        beach in the backwash. A narrow cell at the shoreline raises the
+        errors. It needs the interface pressure layout.
+  \item \textbf{Breaking} has been tested on two cases. The onset is about
+        right, but in the surf zone the bores lose too little energy: the
+        heights are up to twice the measured ones \citep{hansen1979}, and
+        6 cm too large at $x = 8$ m on the beach of \citet{ting1994}, where
+        NHWAVE is 7 cm too large. Only the front columns are hydrostatic, and
+        the non-hydrostatic pressure behind them keeps the bores steep.
+        Breaking columns spread only to neighbours on the same processor.
+  \item \textbf{Wave generation} uses relaxation zones with linear or
+        stream-function targets. There is no boundary wavemaker and no
+        irregular input.
   \item \textbf{Long waves in closed flumes.} The zones absorb long waves only
         partly and the wave-making zone does not conserve volume, so long waves
         of a few millimetres build up and shift the phase over shallow bars in
@@ -58,14 +77,16 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 
 \paragraph{Plans.} In order of priority:
 \begin{enumerate}[nosep]
-  \item wetting and drying with thin-film columns and $q$ switched off in very
-        shallow water, then tests 4.5 and 4.7 of \citet{ma2012};
-  \item breaking: the dissipation of the bores (momentum-conserving face depths
-        at the fronts, or a small eddy viscosity there), a kinematic onset
-        criterion and stabilised $k$--$\omega$ \citep{larsen2018} for
-        many-layer runs;
+  \item breaking: the dissipation of the bores behind the hydrostatic front
+        (a breaking region that covers the roller, or an eddy viscosity there),
+        a kinematic onset criterion and stabilised $k$--$\omega$
+        \citep{larsen2018} for many-layer runs, tested on the beach of
+        \citet{ting1994} with its undertow;
+  \item test 4.7 of \citet{ma2012} (longshore current, 3D wetting and
+        drying) and the landslide of Section~\ref{sec:ma-landslide} with its
+        beach;
   \item volume-conserving wave-making zones and absorption of long waves;
-  \item nonlinear and irregular wave generation and a boundary wavemaker;
+  \item irregular wave generation and a boundary wavemaker;
   \item depth-integrated granular slides for landslide tsunamis;
   \item coupling to \code{interFoam} and \code{sedInterFoam} through relaxation
         zones, and hybrid meshes around structures.

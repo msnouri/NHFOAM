@@ -232,6 +232,18 @@ public:
                 return lineMeshPoints_.size();
             }
 
+            //- Mesh points of each vertical line, surface first
+            const labelListList& lineMeshPoints() const
+            {
+                return lineMeshPoints_;
+            }
+
+            //- Vertical line of each mesh point
+            const labelList& pointLine() const
+            {
+                return pointLine_;
+            }
+
             //- Horizontal position of each line
             const vectorField& lineCentre() const
             {

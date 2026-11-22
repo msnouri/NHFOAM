@@ -8,6 +8,13 @@
 #   MA   : runs of the Ma et al. (2012) tests (ma2012.py)
 #   LAB  : fengyanshi/BENCHMARK_FUNWAVE
 #   NHW  : JimKirby/NHWAVE (lab records of the landslide benchmark)
+#   WD   : wetting-and-drying runs (wetdry.py: $WD/final; NHWAVE runs of the
+#          dam break $WD/db/nw_db, the run-up $WD/runup/nw_ru028[f] and Ting
+#          & Kirby $WD/tk/nw_tk; Ting & Kirby with NHFOAM in $WD/tk)
+#   BP4  : NTHMP benchmark 4 (single wave on a simple beach): profs and
+#          Lab_runup.txt
+#   TK94 : the measurements of Ting & Kirby (1994), Fig. 4, digitised
+#          (x_TK, mean level, crest - mean, trough - mean; not distributed)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -16,6 +23,9 @@ CMP=${CMP:-/home/claude/runs_cmp}
 MA=${MA:-/home/claude/runs_ma}
 LAB=${LAB:-/home/claude/ext/BENCHMARK_FUNWAVE}
 NHW=${NHW:-/home/claude/ext/nhw_forks/NHWAVE_NHWAVE}
+WD=${WD:-/home/claude/runs_wd}
+BP4=${BP4:-/home/claude/ext/nthmp/nthmp-benchmark-problems/BP04-JosephZ-Single_wave_on_simple_beach}
+TK94=${TK94:-/home/claude/ext/tk94/dfdm/examples/tingkirby94_spillingwaves/exp/tk94_fig4_spilling.dat}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -79,3 +89,19 @@ python3 plot_enet_grilli.py $NHW/examples/landslide_benchmarks/BM2_enet_grilli/d
     $RUNS_IF/ieg_llv2:"NHFOAM before the fixes"
 python3 plot_ma2012_berkhoff.py $NHW/examples/berkhoff/postprocessing $OUT/ma2012_berkhoff.png \
     $MA/berkhoff/nf_berk:"NHFOAM@32.25" nhwave:$MA/berkhoff/nw_berk:NHWAVE
+
+# Wetting and drying (report section 6, README 6.6)
+python3 plot_wetdry.py thacker $WD/final/thacker $OUT/wd_thacker.png
+python3 plot_wetdry.py dambreak $OUT/wd_dambreak.png $WD/final/db:NHFOAM \
+    $WD/final/db_plain:"NHFOAM, centred face depth" nhwave:$WD/db/nw_db:NHWAVE
+python3 plot_runup.py $BP4/profs $BP4/Lab_runup.txt $OUT/wd_runup.png 0.0588 \
+    $WD/final/ru:NHFOAM $WD/final/ru_plain:"NHFOAM, centred face depth" \
+    nhwave:$WD/runup/nw_ru028:NHWAVE
+python3 plot_runup.py $BP4/profs $BP4/Lab_runup.txt /tmp/wd_runup_all.png 0.0588 \
+    $WD/final/ru:NHFOAM $WD/final/ru_upw:"NHFOAM, upwind face depth" \
+    $WD/final/ru_plain:"NHFOAM, centred face depth" \
+    $WD/final/ru_cd:"NHFOAM, \$C_d = 0.006\$" nhwave:$WD/runup/nw_ru028f:NHWAVE
+cp /tmp/wd_runup_all_shoreline.png $OUT/wd_runup_shoreline.png
+cp /tmp/wd_runup_all_shoreline.pdf $OUT/wd_runup_shoreline.pdf
+python3 plot_tingkirby.py $TK94 $OUT/tk_spilling.png $WD/tk/tk_nf:NHFOAM \
+    $WD/tk/tk_b01:"NHFOAM, \$\\beta = 0.1\$" nhwave:$WD/tk/nw_tk:NHWAVE

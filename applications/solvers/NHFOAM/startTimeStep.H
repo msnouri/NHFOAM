@@ -7,6 +7,46 @@
     etaN = etaCol;
     ++nEtaLevels;
 
+    // Wetting and drying: flooding and drying from eta^n (NHWAVE's mask
+    // update).  Columns that change state start from the film at both
+    // levels, so the time derivative sees no jump.
+    if (wetDry.active())
+    {
+        wdChanged = wetDry.update(etaN);
+        const boolList& changed = wdChanged;
+        const boolList& wet = wetDry.colWet();
+        const scalarField etaFilm(wetDry.etaMin());
+
+        forAll(wet, coli)
+        {
+            if (!wet[coli] || changed[coli])
+            {
+                if (!wet[coli])
+                {
+                    etaN[coli] = etaFilm[coli];
+                }
+                etaNm1[coli] = etaN[coli];
+                etaCol[coli] = etaN[coli];
+            }
+        }
+
+        wetDry.dryCells(dryFlag);
+        wdSink.field() = dryFlag*(1e4/runTime.deltaTValue());
+
+        label nWet = 0;
+        forAll(wet, coli)
+        {
+            if (wet[coli])
+            {
+                ++nWet;
+            }
+        }
+        reduce(nWet, sumOp<label>());
+
+        Info<< "Wet columns: " << nWet << " (flooded " << wetDry.nFlooded()
+            << ", dried " << wetDry.nDried() << ")" << endl;
+    }
+
     UfNm1 = UfN;
     UfN = Uf;
 

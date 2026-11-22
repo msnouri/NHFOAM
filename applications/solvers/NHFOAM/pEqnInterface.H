@@ -18,6 +18,37 @@
         phiHbyA += MRF.zeroFilter(rAUf*fvc::ddtCorr(U, Uf));
     }
 
+    // Wetting and drying: supercritical side faces take the predicted flux
+    // from the upwind cell (as an HLL flux with both wave speeds positive)
+    wetDry.upwindSupercritical(phiHbyA, HbyA, U, etaN, gMag);
+
+    // Wetting and drying: faces opened by flooding carry no predicted flux
+    // out of the newly wet column
+    wetDry.limitOpenedFaces(phiHbyA, wdChanged, etaN, gMag);
+
+    // Wetting and drying: side fluxes with the upwind (TVD) water depth
+    // (the implicit coefficients are scaled in interfacePressure)
+    if (wetDry.scaleFaceDepth())
+    {
+        wetDry.faceFactors
+        (
+            max(etaMesh, wetDry.etaMin()),
+            phiHbyA,
+            faceFactor,
+            patchFaceFactor
+        );
+
+        phiHbyA.primitiveFieldRef() *= faceFactor;
+
+        forAll(phiHbyA.boundaryField(), patchi)
+        {
+            if (phiHbyA.boundaryField()[patchi].coupled())
+            {
+                phiHbyA.boundaryFieldRef()[patchi] *= patchFaceFactor[patchi];
+            }
+        }
+    }
+
     MRF.makeRelative(phiHbyA);
 
     if (pimple.nCorrPISO() <= 1)
@@ -45,6 +76,26 @@
         }
     }
 
+    // Wetting and drying: shallow columns hydrostatic (optional)
+    if (wetDry.active() && wetDry.hydrostaticDepth() > 0)
+    {
+        const scalarField& zb = columns.columnBottomZ();
+
+        forAll(vFactor, coli)
+        {
+            if (etaN[coli] - zb[coli] < wetDry.hydrostaticDepth())
+            {
+                vFactor[coli] = max(vFactor[coli], hfaFactor);
+            }
+        }
+    }
+
+    // Lowest admissible surface (positivity limiter)
+    const scalarField etaMinWD
+    (
+        wetDry.active() ? wetDry.etaMin() : tmp<scalarField>(new scalarField())
+    );
+
     // Lagged terms are updated in every non-orthogonal corrector
     while (pimple.correctNonOrthogonal())
     {
@@ -60,7 +111,18 @@
 
         if (pimple.finalNonOrthogonalIter())
         {
-            pInt.fluxes(p_rgh, phiHbyA, U, phi);
+            if (wetDry.active())
+            {
+                pInt.fluxes
+                (
+                    p_rgh, phiHbyA, U, phi,
+                    &etaMinWD, &etaHatEff, &colS, aEff
+                );
+            }
+            else
+            {
+                pInt.fluxes(p_rgh, phiHbyA, U, phi);
+            }
         }
 
         gradP = pInt.grad(pI, psCol, p_rgh);
@@ -83,15 +145,80 @@
 
     #include "continuityErrs.H"
 
+    // Wetting and drying: never below the film (the limiter keeps the
+    // columns there up to round-off); dry columns stay at rest
+    if (wetDry.active())
+    {
+        forAll(etaCol, coli)
+        {
+            etaCol[coli] = max(etaCol[coli], etaMinWD[coli]);
+        }
+    }
+
     U = HbyA - rAU*gradP;
+
+    if (wetDry.active())
+    {
+        forAll(dryFlag, celli)
+        {
+            if (dryFlag[celli] > 0.5)
+            {
+                U[celli] = Zero;
+            }
+        }
+    }
+
     U.correctBoundaryConditions();
     fvOptions.correct(U);
 
-    // Face velocity (absolute) for rebuilding the flux after mesh motion
+    // Face velocity (absolute) for rebuilding the flux after mesh motion.
+    // With the upwind face depth it is the flux over the face depth, not
+    // over the mesh face.
     {
         Uf = fvc::interpolate(U);
         surfaceVectorField n(mesh.Sf()/mesh.magSf());
-        Uf += n*(phi/mesh.magSf() - (n & Uf));
+
+        if (wetDry.scaleFaceDepth())
+        {
+            surfaceScalarField un(phi/mesh.magSf());
+            scalarField& uni = un.primitiveFieldRef();
+            const scalarField nUfi(n.primitiveField() & Uf.primitiveField());
+
+            forAll(uni, facei)
+            {
+                const scalar ff = faceFactor[facei];
+                uni[facei] =
+                    ff > 1e-3 ? uni[facei]/ff : (ff > 0 ? nUfi[facei] : 0);
+            }
+
+            forAll(un.boundaryField(), patchi)
+            {
+                if (un.boundaryField()[patchi].coupled())
+                {
+                    scalarField& unp = un.boundaryFieldRef()[patchi];
+                    const scalarField nUfp
+                    (
+                        n.boundaryField()[patchi] & Uf.boundaryField()[patchi]
+                    );
+                    const scalarField& ffp = patchFaceFactor[patchi];
+
+                    forAll(unp, i)
+                    {
+                        unp[i] =
+                        (
+                            ffp[i] > 1e-3 ? unp[i]/ffp[i]
+                          : (ffp[i] > 0 ? nUfp[i] : 0)
+                        );
+                    }
+                }
+            }
+
+            Uf += n*(un - (n & Uf));
+        }
+        else
+        {
+            Uf += n*(phi/mesh.magSf() - (n & Uf));
+        }
     }
 
     // Make the flux relative to the mesh motion

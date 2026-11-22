@@ -1,0 +1,53 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFOAM
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      NHFOAMProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Solitary wave breaking and running up a 1:20 beach (Synolakis 1987; NTHMP
+// benchmark 4; test 4.5 of Ma et al. 2012): d = 0.21 m, H/d = 0.28, toe at
+// x = 4 m, still-water shoreline at x = 8.2 m, dry beach up to x = 11 m.
+
+surfacePatch    surface;
+bottomPatch     bottom;
+minDepth        1e-4;
+stillWaterLevel 0;
+pressureLocation interface;
+
+gauges
+{
+    toe         (4 0.01 0);
+    shoreline   (8.2 0.01 0);
+}
+
+// Columns with no more than the film are dry; the shoreline position is
+// written to postProcessing/wettingDrying/<t0>/shoreline.dat
+wettingDrying
+{
+    minDepth        0.005;      // film [m], as NHWAVE's MinDep
+//  faceDepth       vanLeer;    // upwind | minmod | vanLeer | MC | mesh
+//  upwindFroude    1;          // upwind predicted flux above Fr = 1
+}
+
+// Quadratic bottom friction (NHWAVE's example of this case runs without)
+// bottomFriction { Cd 0.006; }      // or { manning 0.01; }
+
+breaking
+{
+    model       HFA;
+    alpha       0.6;
+    beta        0.3;
+}
+
+// ************************************************************************* //

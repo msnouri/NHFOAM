@@ -10,7 +10,8 @@ NHWAVE repository ships examples for several of them.
 Table~\ref{tab:ma-programme} lists them with what each one tests and whether
 \NHFOAM\ can run it today. Tests 1--4 and 6 need no new physics and were run
 with both models on the same set-up; tests 5 and 7 need wetting and drying,
-which \NHFOAM\ does not have yet. The NHWAVE runs use the binary built from the
+which was added afterwards (Section~\ref{sec:wd}), and test 5 and the
+surf-zone example are reported there. The NHWAVE runs use the binary built from the
 \code{JimKirby/NHWAVE} master branch (Table~\ref{tab:models}); the reruns of
 the paper's own tests check that our NHWAVE runs reproduce the published ones.
 
@@ -27,10 +28,10 @@ the paper's own tests check that our NHWAVE runs reproduce the published ones.
 4.2 & solitary wave, $H/h = 0.5$, constant depth & nonlinearity, time accuracy & exact solution & Section~\ref{sec:ma-solitary} \\
 4.3 & periodic waves over a submerged bar & shoaling, release of harmonics & \citet{luth1994} & Section~\ref{sec:ma-bar} \\
 4.4 & elliptic shoal on a 1:50 slope & 3D refraction and diffraction & \citet{berkhoff1982} & Section~\ref{sec:ma-berkhoff} \\
-4.5 & breaking solitary wave run-up & breaking, wetting and drying & \citet{synolakis1987} & needs wetting and drying \\
+4.5 & breaking solitary wave run-up & breaking, wetting and drying & \citet{synolakis1987} & Section~\ref{sec:wd-runup} \\
 4.6 & 3D rigid landslide, $d = 61$ mm & moving bottom, short trailing waves & \citet{enet2007} & Section~\ref{sec:ma-landslide} \\
-4.7 & longshore current on a plane beach & breaking-driven currents & \citet{visser1991} & needs wetting and drying \\
--- & surf zone (NHWAVE example \code{tingkirby}) & breaking, undertow & \citet{ting1994} & needs wetting and drying \\
+4.7 & longshore current on a plane beach & breaking-driven currents & \citet{visser1991} & not yet run \\
+-- & surf zone (NHWAVE example \code{tingkirby}) & breaking, set-up & \citet{ting1994} & Section~\ref{sec:wd-tk} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -381,7 +382,8 @@ slide also sends waves towards the shore. In \NHFOAM\ they are reflected by
 the wall, less than 0.4 m shoreward of the slide, and come back to the gauges at
 about $t \approx 1.5\,t_0$, when the excess starts; on NHWAVE's beach they run
 up and are partly dissipated. This test
-therefore has to wait for wetting and drying to be conclusive.
+needs the beach to be conclusive; with the wetting and drying of
+Section~\ref{sec:wd} it can now be rerun with it.
 
 \FloatBarrier
 \subsection{Summary of the problems found and their fixes}
@@ -407,7 +409,9 @@ standing wave (Section~\ref{sec:ma-basin}) & short steep waves damped (8.5\% in 
 solitary wave (Section~\ref{sec:ma-solitary}) & height $-6.4\%$, crest 0.77 m late in 150 m & convecting flux of level $n$: first order in time & flux extrapolation \eqref{eq:fluxext}: $-1.0\%$, 0.07 m, no extra cost \\
 submerged bar (Section~\ref{sec:ma-bar}) & phase closer to the lab before the fix & the first-order lag cancelled an error shared with NHWAVE & none yet; the phase now agrees with NHWAVE \\
 elliptic shoal (Section~\ref{sec:ma-berkhoff}) & run fails at 35 s in a shallow corner & waves break there; filtered scheme, no breaking model & \code{limitedLinearV} and HFA wherever waves break: the run goes on, same errors \\
-landslide (Section~\ref{sec:ma-landslide}) & trailing waves 1.5--3 times too large & probably the wall that replaces the beach & needs wetting and drying \\
+landslide (Section~\ref{sec:ma-landslide}) & trailing waves 1.5--3 times too large & probably the wall that replaces the beach & rerun with the beach (now possible) \\
+run-up (Section~\ref{sec:wd-runup}) & front too slow, $R/d = 0.41$; oscillating swash & centred face depth, interpolated flux at the tip & upwind (TVD) face depth, supercritical upwind flux: $R/d = 0.531$ (NHWAVE 0.512) \\
+surf zone (Section~\ref{sec:wd-tk}) & heights 6 cm too large at $x = 8$ m & too little dissipation behind the hydrostatic front & none yet (NHWAVE: 7 cm) \\
 \bottomrule
 \end{tabular}
 \end{table}

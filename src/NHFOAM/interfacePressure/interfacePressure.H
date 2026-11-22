@@ -150,6 +150,21 @@ class interfacePressure
             scalarField corr_;
             FieldField<Field, scalar> corrB_;
 
+        // Wetting and drying (null: all faces open)
+            //- Open internal faces
+            const boolList* faceOpenPtr_;
+
+            //- Open faces of the coupled side patches
+            const List<boolList>* patchFaceOpenPtr_;
+
+            //- Scale factors of the side fluxes (water depth at the face
+            //  over the depth of the mesh face; null: 1)
+            const scalarField* faceFactorPtr_;
+            const List<scalarField>* patchFaceFactorPtr_;
+
+            //- Number of faces limited by the last positivity limiter
+            mutable label nLimited_;
+
 
     // Private Member Functions
 
@@ -202,6 +217,38 @@ public:
             const dictionary& controls
         );
 
+        //- Wetting and drying: closed side faces carry no flux, and the
+        //  pressure gradient treats them as walls
+        void setFaceMask
+        (
+            const boolList& faceOpen,
+            const List<boolList>& patchFaceOpen
+        )
+        {
+            faceOpenPtr_ = &faceOpen;
+            patchFaceOpenPtr_ = &patchFaceOpen;
+        }
+
+        //- Wetting and drying: the side fluxes are scaled by these factors
+        //  (water depth at the face over the depth of the mesh face).  The
+        //  implicit coefficients of the side faces are scaled here; the
+        //  phiHbyA given to solve and fluxes must be scaled already.
+        void setFaceFactor
+        (
+            const scalarField& faceFactor,
+            const List<scalarField>& patchFaceFactor
+        )
+        {
+            faceFactorPtr_ = &faceFactor;
+            patchFaceFactorPtr_ = &patchFaceFactor;
+        }
+
+        //- Faces limited by the last positivity limiter (global)
+        label nLimited() const
+        {
+            return nLimited_;
+        }
+
         //- Cell-centre pressure (mean of the two interfaces); the surface
         //  patch of pCell (mixed) is set to ps
         void cellPressure
@@ -223,12 +270,20 @@ public:
 
         //- Absolute face fluxes after the solve (pCell: new cell pressure).
         //  Every cell is conservative; returns the surface flux per column.
+        //  With etaMinPtr (wetting and drying) the side outflows of the
+        //  columns that would fall below etaMin are scaled down, so that
+        //      (colS eta^{n+1} - etaHatEff) A/aEff = phi_s
+        //  gives eta^{n+1} >= etaMin (positivity limiter).
         tmp<scalarField> fluxes
         (
             const volScalarField& pCell,
             const surfaceScalarField& phiHbyA,
             const volVectorField& U,
-            surfaceScalarField& phi
+            surfaceScalarField& phi,
+            const scalarField* etaMinPtr = nullptr,
+            const scalarField* etaHatEffPtr = nullptr,
+            const scalarField* colSPtr = nullptr,
+            const scalar aEff = 0
         ) const;
 };
 

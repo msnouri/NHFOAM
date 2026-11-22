@@ -14,14 +14,28 @@ License
     (at your option) any later version.
 
 Class
-    Foam::linearWave
+    Foam::regularWave
 
 Description
-    Linear (Airy) progressive wave on constant depth: surface elevation and
-    velocity, with an optional smooth start-up ramp.
+    Regular progressive wave on constant depth: surface elevation and
+    velocity, with an optional smooth start-up ramp.  Two theories:
+
+    linear (default): the Airy wave,
+        eta = (H/2) cos(theta),  theta = k (x - x0).d - omega t + phase,
+    with k from the linear dispersion relation.
+
+    streamFunction: a steady wave of any height from the Fourier
+    approximation of Fenton (1988), whose coefficients are computed
+    beforehand (validation/stream_function.py writes these entries):
+        eta = sum_{j=0}^{N} E_j cos(j theta)
+        u   = uMean + sum_j j k B_j cosh(j k z_b)/cosh(j k h) cos(j theta)
+        w   =         sum_j j k B_j sinh(j k z_b)/cosh(j k h) sin(j theta)
+    with z_b the height above the bottom and uMean the Eulerian mean current
+    (the return current of a closed flume for zero mass flux).
 
     Dictionary entries
     \verbatim
+        theory          linear;     // linear | streamFunction
         waveHeight      0.02;       // H [m]
         wavePeriod      2.02;       // T [s]
         depth           0.4;        // still-water depth h [m]
@@ -29,22 +43,28 @@ Description
         phase           0;          // [rad], optional
         rampTime        4;          // [s], optional (default 0: no ramp)
         origin          (0 0 0);    // phase origin, optional
+
+        // streamFunction only
+        waveNumber      1.659;      // k [1/m]
+        uMean           -0.024;     // Eulerian mean current [m/s]
+        etaCoeffs       (...);      // E_0 ... E_N [m]
+        psiCoeffs       (...);      // B_1 ... B_N [m^2/s]
     \endverbatim
 
-    Elevations are relative to the still-water level swl:
-        eta = (H/2) cos(k (x - x0).d - omega t + phase)
-    Velocities use z measured from swl (z - swl).
+    Elevations are relative to the still-water level swl; velocities use z
+    measured from swl (z - swl).
 
 SourceFiles
-    linearWave.C
+    regularWave.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef linearWave_H
-#define linearWave_H
+#ifndef regularWave_H
+#define regularWave_H
 
 #include "dictionary.H"
 #include "point.H"
+#include "scalarList.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -52,10 +72,10 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                         Class linearWave Declaration
+                         Class regularWave Declaration
 \*---------------------------------------------------------------------------*/
 
-class linearWave
+class regularWave
 {
     // Private data
 
@@ -71,13 +91,25 @@ class linearWave
         scalar omega_;
         scalar k_;
 
+        //- Stream-function wave (Fenton 1988)
+        bool streamFunction_;
+        scalar uMean_;
+        scalarList E_;
+        scalarList B_;
+
+
+    // Private Member Functions
+
+        //- Phase at x and t
+        scalar theta(const point& x, const scalar t) const;
+
 
 public:
 
     // Constructors
 
         //- Construct from dictionary, gravity magnitude and still-water level
-        linearWave(const dictionary& dict, const scalar g, const scalar swl);
+        regularWave(const dictionary& dict, const scalar g, const scalar swl);
 
 
     // Static Functions

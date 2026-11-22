@@ -44,7 +44,7 @@ Foam::forcingZone::forcingZone
     if (type == "wave")
     {
         isWave_ = true;
-        wave_.reset(new linearWave(dict, g, swl));
+        wave_.reset(new regularWave(dict, g, swl));
     }
     else if (type != "sponge")
     {

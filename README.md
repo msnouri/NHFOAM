@@ -13,12 +13,14 @@ function objects.
 
 > Status: research code. 2DV and 3D, pressure on the layer interfaces as in
 > NHWAVE (2–3 layers resolve dispersion up to kh = 7), second order in time,
-> prescribed seabed motion (tsunami generation, solid landslides) and
-> depth-induced breaking with the hydrostatic front approximation. No wetting
-> and drying yet. See *Limitations* and *Roadmap* below.
+> prescribed seabed motion (tsunami generation, solid landslides),
+> depth-induced breaking with the hydrostatic front approximation, and
+> wetting and drying (moving shorelines, run-up) after NHWAVE. See
+> *Limitations* and *Roadmap* below.
 >
 > **Report:** the model, its verification and its validation against NHWAVE
-> (following the tests of Ma et al. 2012) are documented in
+> (following the tests of Ma et al. 2012, with wetting and drying) are
+> documented in
 > [`doc/report/NHFOAM_report.pdf`](doc/report/NHFOAM_report.pdf) (LaTeX
 > sources in `doc/report`).
 
@@ -183,6 +185,48 @@ vertical fluxes.
 The wave front then travels as a bore. The conservative momentum equation
 with a TVD convection scheme dissipates its energy.
 
+**Wetting and drying.** Dry columns keep a thin film (`minDepth`), as in
+NHWAVE, and the mask is updated at the start of each step with NHWAVE's
+rules: a dry column floods when a wet neighbour has a higher surface and more
+than the film; a wet column dries when its depth is down to the film. Faces
+between a wet and a dry column are closed: no flux, and the pressure gradient
+treats them as walls, so still water stays at rest against a dry beach. Dry
+columns (and puddles whose faces are all closed) are held at rest. What had
+to change for the implicit free surface and the collocated mesh:
+
+- *Positivity.* The pressure solve can draw more water from a shallow column
+  than it holds; the side outflows of such a column are scaled down after the
+  solve so that its surface stays at the film. Volume is conserved, unlike
+  NHWAVE's clip `D = max(D, MinDep)`.
+- *Upwind face depth.* The side fluxes carry the water depth of the upwind
+  column, D_f = η_f − z_b,f with η_f the TVD (van Leer) reconstruction of the
+  upwind surface (`faceDepth`; first-order upwind next to near-dry columns),
+  as in the staggered schemes of Stelling & Duinmeijer (2003) and SWASH, and
+  as NHWAVE's MUSCL–HLL fluxes do. With the centred depth of the mesh faces
+  the fronts ran too slowly (run-up R/d = 0.41 instead of 0.51).
+- *Supercritical faces.* Where the upwind column is supercritical (Fr > 1,
+  `upwindFroude`), the predicted face flux is that of the upwind cell, as an
+  HLL flux with both wave speeds positive. Blending it in below Fr = 1 makes
+  the collocated mesh noisy.
+- *Opened faces.* In the step after a column floods, its new faces only let
+  water in; a lower neighbour gets at least the dam-break velocity
+  ⅔√(g(D − minDepth)), so puddles drain downhill.
+
+`postProcessing/wettingDrying/<t0>/shoreline.dat` holds the number of wet
+columns, the highest wet bed and the highest surface on land at every step.
+Section 6.6 compares the method with NHWAVE's and tests it.
+
+**Bottom friction** (optional): a quadratic stress C_d |u_b| u_b on the
+bottom cells, with constant C_d or C_d = g n²/D^(1/3) from a Manning
+coefficient.
+
+**Nonlinear waves.** The wave-making zones take a linear (Airy) target or a
+stream-function wave of any height (Fenton 1988), whose Fourier coefficients
+`validation/stream_function.py H T h [N]` computes (zero mass flux, i.e. with
+the return current of a closed flume). In a flat flume the zone made the
+wave of Ting & Kirby (1994), H = 0.125 m, T = 2 s, h = 0.4 m (Ursell number
+27), with H = 0.1246–0.1249 m over 10 m and no beating of free harmonics.
+
 **Convection.** For waves that do not break, use filtered central
 differencing, `Gauss filteredLinear2V 0.2 0`: it damps as little as central
 differencing, and its filter on grid-scale oscillations kept it stable in
@@ -278,6 +322,8 @@ forcingZones
         waveHeight  0.02;  wavePeriod 2.02;  depth 0.4;
         direction   (1 0 0);
         rampTime    4.04;
+        // theory streamFunction; waveNumber ...; uMean ...;
+        // etaCoeffs (...); psiCoeffs (...);  <- validation/stream_function.py
     }
     outlet
     {
@@ -301,6 +347,23 @@ breaking                     // hydrostatic front approximation
     alpha       0.6;         // onset:       d(eta)/dt > alpha sqrt(g D)
     beta        0.3;         // persistence: d(eta)/dt > beta  sqrt(g D)
     hydrostaticFactor 1000;  // extra vertical coupling in breaking columns
+}
+
+wettingDrying                // moving shorelines (pressureLocation interface)
+{
+    minDepth         0.005;  // film of the dry columns [m]
+    tolerance        1e-6;   // drying when D - minDepth <= tolerance
+    faceDepth        vanLeer;// depth of the side fluxes: upwind | minmod |
+                             // vanLeer | MC | mesh (centred)
+    faceDepthBelow   1e15;   // ... only where a column is shallower [m]
+    upwindFroude     1;      // upwind predicted flux above this Froude
+                             // number (0: off)
+    hydrostaticDepth 0;      // q = 0 in columns shallower than this [m]
+}
+
+bottomFriction               // quadratic bottom stress
+{
+    Cd          0.006;       // or: manning 0.012;
 }
 
 bottomMotion                 // prescribed seabed motion
@@ -327,6 +390,12 @@ bottomMotion                 // rigid slide on a plane slope
     initialAcceleration  1.12;   // a_0
 }
 ```
+
+With wetting and drying, build the beach into the mesh up to the highest
+run-up, with the top of the mesh at the still water level where the bed is
+below it and at the bed plus the film where it is above
+(`validation/make_case.py`: `beach_profile`); NHFOAM puts the surface of the
+dry columns on the film at the start.
 
 With a moving bottom, use `nhMovingSlipVelocity` for U on the bottom patch,
 and add `libs ("libNHFOAM.so");` to `system/controlDict` so that utilities
@@ -418,6 +487,7 @@ structuredCoeffs { method simple; patches (bottom); simpleCoeffs { n (2 1 1); } 
 | `bottomUplift` | 2DV tsunami generation by a bottom uplift (Hammack 1973 type), `nhMovingSlipVelocity` bottom |
 | `landslide3D` | 3D rigid slide of Enet & Grilli (2007), NTHMP landslide benchmark 2, on a coarse mesh (about 3.5 min on one core); `Allrun-parallel` for 2 processors |
 | `breakingSlope` | Hansen & Svendsen (1979) spilling breakers on a 1:34 slope with the hydrostatic front approximation and a velocity-only sponge (about 8 min) |
+| `beachRunup` | solitary wave (H/d = 0.28) breaking and running up a 1:20 beach with **wetting and drying** (Synolakis 1987; NTHMP benchmark 4; about 40 s); prints the maximum run-up (R/d = 0.52, lab about 0.5) |
 
 Each case runs with `./Allrun` and cleans with `./Allclean`. `validation/`
 holds the scripts used to generate cases and make the figures below
@@ -754,9 +824,10 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | 4.2 solitary wave, H/h = 0.5 | exact solution | 6.2 |
 | 4.3 periodic waves over a submerged bar | Luth et al. (1994) | 6.3 |
 | 4.4 elliptic shoal on a 1:50 slope | Berkhoff et al. (1982) | 6.4 |
-| 4.5 breaking solitary wave run-up | Synolakis (1987) | needs wetting and drying |
+| 4.5 breaking solitary wave run-up | Synolakis (1987) | 6.6 |
 | 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 6.5 (and 5.5) |
-| 4.7 longshore current on a plane beach | Visser (1991) | needs wetting and drying |
+| 4.7 longshore current on a plane beach | Visser (1991) | not yet run |
+| (NHWAVE example) surf zone | Ting & Kirby (1994) | 6.6 |
 
 Two of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, and the solitary wave
@@ -888,23 +959,94 @@ The excess is therefore not missing numerical damping. Its likely cause is
 the wall that replaces the beach 0.2 m from the shoreline: the waves the
 slide sends shoreward are reflected there and reach the gauges at about
 1.5 t₀, when the excess starts, while on NHWAVE's beach they run up. The
-test needs wetting and drying to be conclusive.
+test needs the beach to be conclusive; with wetting and drying (6.6) it can
+now be rerun with it.
+
+### 6.6 Wetting and drying (test 4.5, and the surf zone)
+
+The method is summarised in section 1; `validation/wetdry.py` builds the
+cases, `plot_wetdry.py`, `plot_runup.py` and `plot_tingkirby.py` make the
+figures. Compared with NHWAVE (read from `nhwave.F`):
+
+| | NHWAVE | NHFOAM |
+|---|---|---|
+| mask | from η at each step: flood if a wet neighbour is higher and has more than the film; dry at the film | same |
+| faces of dry cells | no mass flux; the wet side's hydrostatic pressure (a wall) | closed: no flux, a wall for the pressure gradient |
+| positivity | D = max(D, MinDep) after each stage (adds water) | limiter on the outflows (conservative) |
+| depth at wet faces | MUSCL (van Leer) η, HLL flux | TVD (van Leer) η, upwind next to near-dry columns |
+| supercritical faces | HLL takes the upwind flux | predicted flux of the upwind cell |
+| newly wet faces, puddles | HLL depth diffusion | flux only into the new column, dam-break velocity downhill; puddles held at rest |
+| breaking | shock capturing (+ k–ε in the surf-zone example) | hydrostatic front approximation |
+
+**Verification.** Still water against a dry 1:20 beach stays at rest
+(|u| < 10⁻⁸ m/s after 10 s). In Thacker's (1981) parabolic basin (a = 100 m,
+h₀ = 0.5 m, Δx = 1 m, 3 layers, two periods) the rms error of the planar
+surface is 0.9 mm (largest 7.4 mm, for a surface that moves by ±0.16 m), and
+the shorelines are within 1.7 m (0.8 m on average). In a dam break on a dry
+bed (h₀ = 0.1 m), both models treat the 1 mm film as a wet bed and follow
+Stoker's solution for it, not Ritter's: the fronts are at 8.95 m (NHFOAM),
+8.77 m (NHWAVE) and 8.70 m (Stoker) after 3 s, against 10.94 m for a truly
+dry bed. With the centred face depth NHFOAM's front was at 7.69 m.
+
+![Thacker](doc/figures/wd_thacker.png)
+
+![dam break](doc/figures/wd_dambreak.png)
+
+**Breaking solitary wave on a 1:20 beach** (Synolakis 1987; NTHMP benchmark
+4), H/d = 0.28, d = 0.21 m, on NHWAVE's example set-up (Δx = 2 cm, 3
+layers, 5 mm film, no bottom friction, as the example). Both models start
+from the exact solitary wave. The profiles follow the measurements and
+NHWAVE. The maximum run-up is R/d = 0.531 at t√(g/d) = 42.5, against 0.512
+for NHWAVE and 0.49–0.55 measured for H/d = 0.26–0.30 (first-order upwind
+depth 0.531, centred depth 0.412, C_d = 0.006: 0.464). In the backwash, thin
+puddles left on the upper beach slow the receding of the highest wet column.
+A parallel run with a processor boundary in the swash gives R/d = 0.540.
+
+![run-up](doc/figures/wd_runup.png)
+
+![run-up in time](doc/figures/wd_runup_shoreline.png)
+
+**Spilling breakers on a 1:35 beach** (Ting & Kirby 1994), T = 2 s,
+H = 0.125 m, h = 0.4 m, x from the toe. NHFOAM: stream-function waves in a
+relaxation zone, beach onto dry land, 10 layers, Δx = 2.5 cm, C_d = 0.006,
+HFA. NHWAVE: its example `tingkirby` (20 layers, k–ε, cnoidal wavemaker).
+Statistics over the last 10 of 30 periods (cm):
+
+| | lab | NHFOAM | NHFOAM, β = 0.1 | NHWAVE |
+|---|---|---|---|---|
+| H at x = −0.5 m | 12.3 | 12.3 | 12.3 | 13.1 |
+| largest H, at x | 16.5, 6.0 m | 17.3, 6.5 m | 17.1, 6.1 m | 18.0, 6.9 m |
+| H at x = 8 m | 9.3 | 15.4 | 13.3 | 16.1 |
+| H at x = 11 m | 3.9 | 10.0 | 8.3 | 6.4 |
+| mean error of H, x > 7 m | | +6.1 | +4.2 | +4.8 |
+| mean level at x = 11 m | 1.4 | 0.5 | 0.7 | 0.0 |
+
+Shoaling and the breaking point agree with the measurements (rms error of H
+0.5 cm before x = 6 m; NHWAVE 1.4 cm), but in the surf zone both models lose
+too little energy and the setup is too small. In NHFOAM only the front
+columns of the sawtooth bores are flagged as breaking: keeping columns
+breaking down to β = 0.1 cuts the error by a third, and q = 0 in all columns
+shallower than 0.23 m leaves +2.8 cm. Hydrostatic bores themselves are right
+(a dam break onto a 2 cm bed matches Stoker's bore within about 1%). The
+dissipation behind the hydrostatic front is the next thing to fix.
+
+![Ting and Kirby](doc/figures/tk_spilling.png)
 
 ## 7. Limitations (this version)
 
-- **No wetting and drying.** The depth is only limited by `minDepth`. Runup,
-  inundation and the wave setup at the shoreline are not possible yet;
-  beaches have to end in a wall or a shelf with a sponge.
-- **Breaking (HFA) is a first version.** It has been tested on one case
-  only (spilling breakers, 5.6). With the interface pressure, the breaking
-  point is within 0.1 m of the measured one, but the bores lose too little
-  energy in the surf zone, and the wave heights there are up to twice the
-  measured ones. Breaking columns spread only to neighbours on the same
+- **Wetting and drying** has been tested in 2DV, on meshes with uniform
+  cells near the shoreline. The film acts as a wet bed (in NHWAVE too), so
+  thin swash flows run slower than over a truly dry bed, and puddles of a
+  few millimetres above the film stay on the beach in the backwash. A narrow
+  cell at the shoreline raises the errors. It needs the interface pressure.
+- **Breaking (HFA).** Tested on two beaches (5.6, 6.6). The breaking point is
+  within 0.1–0.5 m of the measured one, but the bores lose too little energy
+  in the surf zone: the wave heights there are up to twice the measured ones
+  (6 cm too large at x = 8 m on Ting & Kirby's beach, where NHWAVE is 7 cm
+  too large). Breaking columns spread only to neighbours on the same
   processor.
-- **Wave generation** is by relaxation zones with linear (Airy) targets only.
-  Steep or long waves (high Ursell number) carry spurious free harmonics.
-  There is no boundary wavemaker and no irregular, cnoidal or stream-function
-  input.
+- **Wave generation** is by relaxation zones with linear or stream-function
+  targets. There is no boundary wavemaker and no irregular input.
 - **Restarts** do not save the BDF2 history of η or Uf. The first step after
   a restart is Euler without flux extrapolation, and the flux is rebuilt
   from U.
@@ -929,21 +1071,24 @@ interfaces (NHWAVE's arrangement) with a column preconditioner, and, from
 the tests of Ma et al. (2012), second-order time integration (extrapolated
 convecting flux) and filtered central convection for non-breaking waves.
 
-The comparisons with NHWAVE and REEF3D::NHFLOW (sections 5 and 6) set the
-order. Wetting and drying comes first now: it is what the remaining tests of
-Ma et al. (4.5 and 4.7) need.
+Then wetting and drying (thin-film mask after NHWAVE, conservative
+positivity limiter, upwind/TVD face depths, supercritical upwind fluxes),
+quadratic bottom friction and stream-function wave generation, with the
+run-up of test 4.5 and the surf zone of Ting & Kirby (6.6).
 
-1. Wetting/drying with thin-film columns and q switched off in very shallow
-   water, so that beaches, runup and setup can be modelled.
-2. Breaking: the dissipation of the hydrostatic bores in the surf zone
-   (momentum-conserving face depths at the fronts, or a small eddy
-   viscosity there), a kinematic B = u/c onset trigger, and stabilised k–ω
-   (Larsen & Fuhrman 2018) for many-layer runs.
+The comparisons with NHWAVE and REEF3D::NHFLOW (sections 5 and 6) set the
+order:
+
+1. Breaking: the dissipation of the bores behind the hydrostatic front (a
+   breaking region that covers the roller, or an eddy viscosity there), a
+   kinematic B = u/c onset trigger, and stabilised k–ω (Larsen & Fuhrman
+   2018) for many-layer runs; Ting & Kirby's undertow.
+2. Test 4.7 (longshore current, 3D wetting and drying) and the landslide of
+   6.5 with its beach.
 3. Steady long runs: volume-conserving wave-making zones (with a return
    current for the Stokes drift, as in a closed flume) and absorbing zones
    that also take out the long waves of the flume (see 5.4).
-4. Nonlinear wave generation (stream function, cnoidal) and irregular
-   spectra in the relaxation zones; a boundary wavemaker.
+4. Irregular spectra in the relaxation zones; a boundary wavemaker.
 5. Depth-integrated granular slides on a finite-area mesh for landslide
    tsunamis (NTHMP benchmarks 4–5).
 6. One-way, then two-way, coupling to interFoam/sedInterFoam relaxation
@@ -974,6 +1119,21 @@ Ma et al. (4.5 and 4.7) need.
   wave propagation models for simple harmonic linear water waves. *Coastal
   Engineering* 6, 255–279.
 - Synolakis, C.E. (1987). The runup of solitary waves. *JFM* 185, 523–545.
+- Synolakis, C.E., Bernard, E.N., Titov, V.V., Kânoğlu, U., González, F.I.
+  (2008). Validation and verification of tsunami numerical models. *Pure and
+  Applied Geophysics* 165, 2197–2228.
+- Ting, F.C.K., Kirby, J.T. (1994). Observation of undertow and turbulence in
+  a laboratory surf zone. *Coastal Engineering* 24, 51–80.
+- Thacker, W.C. (1981). Some exact solutions to the nonlinear shallow-water
+  wave equations. *JFM* 107, 499–508.
+- Ritter, A. (1892). Die Fortpflanzung der Wasserwellen. *Zeitschrift des
+  Vereines Deutscher Ingenieure* 36, 947–954.
+- Stoker, J.J. (1957). *Water Waves.* Interscience, New York.
+- Stelling, G.S., Duinmeijer, S.P.A. (2003). A staggered conservative scheme
+  for every Froude number in rapidly varied shallow water flows. *IJNMF* 43,
+  1329–1354.
+- Fenton, J.D. (1988). The numerical solution of steady water wave problems.
+  *Computers & Geosciences* 14, 357–368.
 - Visser, P.J. (1991). Laboratory measurements of uniform longshore currents.
   *Coastal Engineering* 15, 563–593.
 - Beji, S., Battjes, J.A. (1993). Experimental investigation of wave

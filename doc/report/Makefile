@@ -1,5 +1,5 @@
 # Build the report: make  (needs pdflatex and bibtex)
-NHFOAM_report.pdf: *.tex 7-References.bib ../figures/*.pdf
+NHFOAM_report.pdf: *.tex 8-References.bib ../figures/*.pdf
 	pdflatex -interaction=nonstopmode 0-main > /dev/null
 	bibtex 0-main > /dev/null
 	pdflatex -interaction=nonstopmode 0-main > /dev/null

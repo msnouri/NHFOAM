@@ -29,10 +29,16 @@ sigmaColumns columns(mesh, nhProperties);
 
 const label surfaceID = columns.surfacePatchID();
 
-// Smallest water depth used to place the mesh points
+// Wetting and drying (NHFOAMProperties/wettingDrying; off if absent)
+wettingDrying wetDry(mesh, columns, nhProperties);
+
+// Smallest water depth used to place the mesh points: the film of the dry
+// columns with wetting and drying
 const scalar minDepth
 (
-    nhProperties.getOrDefault<scalar>("minDepth", 1e-4)
+    wetDry.active()
+  ? wetDry.minDepth()
+  : nhProperties.getOrDefault<scalar>("minDepth", 1e-4)
 );
 
 
@@ -51,8 +57,10 @@ volScalarField eta
     mesh
 );
 
-// Free-surface elevation per water column (the value of the surface cell)
+// Free-surface elevation per water column (the value of the surface cell);
+// dry columns get the film
 scalarField etaCol(columns.columnValues(eta.primitiveField()));
+wetDry.initialise(etaCol);
 
 // Time levels and coefficients of the free-surface time integration
 scalarField etaN(etaCol);       // eta at time level n
@@ -449,4 +457,107 @@ if (interfaceP)
             pIntPtr->grad(pIPtr(), psCol, p_rgh)
         )
     );
+
+    if (wetDry.active())
+    {
+        pIntPtr->setFaceMask(wetDry.faceOpen(), wetDry.patchFaceOpen());
+        gradPPtr() = pIntPtr->grad(pIPtr(), psCol, p_rgh);
+    }
+}
+
+if (wetDry.active() && !interfaceP)
+{
+    FatalErrorInFunction
+        << "wettingDrying needs pressureLocation interface"
+        << exit(FatalError);
+}
+
+// Columns that changed state (flooded or dried) at the start of the step
+boolList wdChanged(columns.nColumns(), false);
+
+// Wetting and drying: the side fluxes carry the upwind (TVD) water depth
+// through scale factors (wettingDrying::faceFactors), evaluated on the
+// surface of the current mesh
+scalarField etaMesh(etaCol);
+scalarField faceFactor(mesh.nInternalFaces(), 1.0);
+List<scalarField> patchFaceFactor(mesh.boundary().size());
+forAll(patchFaceFactor, patchi)
+{
+    patchFaceFactor[patchi].setSize(mesh.boundary()[patchi].size(), 1.0);
+}
+
+if (wetDry.scaleFaceDepth())
+{
+    pIntPtr->setFaceFactor(faceFactor, patchFaceFactor);
+}
+
+// Dry columns: the velocity is held at zero by a large implicit sink
+volScalarField::Internal wdSink
+(
+    IOobject
+    (
+        "wdSink",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimless/dimTime, 0)
+);
+
+scalarField dryFlag(mesh.nCells(), 0);
+
+// Quadratic bottom friction on the bottom cells,
+//     tau_b/rho = Cd |u_h| u   (Cd constant, or g n^2/D^(1/3) with Manning n)
+// applied as an implicit sink Cd |u_h| A_b/V in the bottom cells
+const dictionary* botFrictionDictPtr =
+    nhProperties.findDict("bottomFriction");
+scalar botCd = 0;
+scalar botManning = 0;
+
+if (botFrictionDictPtr)
+{
+    botCd = botFrictionDictPtr->getOrDefault<scalar>("Cd", 0);
+    botManning = botFrictionDictPtr->getOrDefault<scalar>("manning", 0);
+
+    Info<< "Bottom friction: "
+        << (botManning > 0 ? "Manning n = " : "Cd = ")
+        << (botManning > 0 ? botManning : botCd) << nl << endl;
+}
+
+volScalarField::Internal botDrag
+(
+    IOobject
+    (
+        "botDrag",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimless/dimTime, 0)
+);
+
+// Shoreline record (wetting and drying): time, wet columns, highest wet
+// bed, highest free surface over ground above the still-water level
+autoPtr<OFstream> shorelineFilePtr;
+const scalarField zbInitial(columns.columnBottomZ());
+const scalar wdStillWaterLevel
+(
+    nhProperties.getOrDefault<scalar>("stillWaterLevel", 0)
+);
+
+if (wetDry.active() && Pstream::master())
+{
+    const fileName dir
+    (
+        runTime.globalPath()/"postProcessing"/"wettingDrying"
+       /runTime.timeName()
+    );
+    mkDir(dir);
+    shorelineFilePtr.reset(new OFstream(dir/"shoreline.dat"));
+    shorelineFilePtr()
+        << "# time  wetColumns  maxWetBed  maxEtaOnLand" << endl;
 }

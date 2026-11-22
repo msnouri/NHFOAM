@@ -67,6 +67,9 @@ forcingZones
         sigmaMax    20;  exponent 2;
         waveHeight  0.02;  wavePeriod 2.02;  depth 0.4;
         direction   (1 0 0);  rampTime 4.04;
+        // theory streamFunction;  waveNumber ...;  uMean ...;
+        // etaCoeffs (...);  psiCoeffs (...);   from
+        // validation/stream_function.py H T h [N]
     }
     outlet
     {
@@ -78,6 +81,18 @@ forcingZones
 }
 
 breaking { model HFA; alpha 0.6; beta 0.3; hydrostaticFactor 1000; }
+
+wettingDrying                 // needs pressureLocation interface
+{
+    minDepth         0.005;   // film of the dry columns [m]
+    tolerance        1e-6;    // drying when D - minDepth <= this
+    faceDepth        vanLeer; // upwind | minmod | vanLeer | MC | mesh
+    faceDepthBelow   1e15;    // ... only where a column is shallower
+    upwindFroude     1;       // upwind predicted flux above this (0: off)
+    hydrostaticDepth 0;       // q = 0 in columns shallower than this
+}
+
+bottomFriction { Cd 0.006; }  // or { manning 0.012; }
 
 bottomMotion                  // uplift, or slide (see the source)
 {
@@ -143,8 +158,11 @@ structuredCoeffs
 
 The tutorials are \code{standingWave}, \code{solitaryWave},
 \code{submergedBar}, \code{circularBasin} (3D unstructured prisms),
-\code{bottomUplift}, \code{landslide3D} and \code{breakingSlope}. Each runs with
-\code{./Allrun}. The folder \code{validation/} holds the scripts that build the
-validation cases (\code{make\_case.py}, \code{ma2012.py},
-\code{other\_models.py} for the NHWAVE and REEF3D::NHFLOW input) and make the
-figures of this report (\code{make\_figures.sh}).
+\code{bottomUplift}, \code{landslide3D}, \code{breakingSlope} and
+\code{beachRunup} (the solitary wave of Section~\ref{sec:wd-runup}, with
+wetting and drying). Each runs with \code{./Allrun}. The folder
+\code{validation/} holds the scripts that build the validation cases
+(\code{make\_case.py}, \code{ma2012.py}, \code{wetdry.py} for the wetting and
+drying tests, \code{other\_models.py} for the NHWAVE and REEF3D::NHFLOW input,
+\code{stream\_function.py} for nonlinear waves) and make the figures of this
+report (\code{make\_figures.sh}).
