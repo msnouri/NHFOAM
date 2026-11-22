@@ -20,6 +20,19 @@
             << " drying is off (NHFOAMProperties/wettingDrying)" << endl;
     }
 
+    // Time averages
+    if (avgDictPtr && runTime.value() > avgStart + 0.5*runTime.deltaTValue())
+    {
+        const scalar dt = runTime.deltaTValue();
+        const scalar w = dt/(avgTime + dt);
+
+        UMeanPtr->primitiveFieldRef() +=
+            w*(U.primitiveField() - UMeanPtr->primitiveField());
+        etaMeanPtr->primitiveFieldRef() +=
+            w*(eta.primitiveField() - etaMeanPtr->primitiveField());
+        avgTime += dt;
+    }
+
     // Wetting and drying: limiter and shoreline record
     if (wetDry.active())
     {

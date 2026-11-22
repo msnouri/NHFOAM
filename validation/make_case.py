@@ -29,7 +29,8 @@ def write(case, rel, cls, body):
     with open(path, "w") as f:
         f.write(HDR.format(cls=cls, loc=loc, obj=obj) + textwrap.dedent(body).strip() + "\n" + FTR)
 
-def common_fields(case, walls=("left", "right"), extra_U=None, extra_p=None, empty=True):
+def common_fields(case, walls=("left", "right"), extra_U=None, extra_p=None, empty=True,
+                  constraint_types=False):
     wallU = "".join(f"    {w}\n    {{\n        type            slip;\n    }}\n" for w in walls)
     wallP = "".join(f"    {w}\n    {{\n        type            fixedFluxPressure;\n        value           uniform 0;\n    }}\n" for w in walls)
     fbE = "    frontAndBack\n    {\n        type            empty;\n    }\n" if empty else ""
@@ -91,6 +92,15 @@ boundaryField
     }}
 {wallE}{fbE}}}
 """)
+    if constraint_types:
+        # entries for the constraint patches (cyclic, processor, ...)
+        for f in os.listdir(os.path.join(case, "0")):
+            path = os.path.join(case, "0", f)
+            txt = open(path).read()
+            txt = txt.replace("boundaryField\n{\n",
+                              "boundaryField\n{\n    #includeEtc \"caseDicts/setConstraintTypes\"\n", 1)
+            open(path, "w").write(txt)
+
 
 # Vertical location of the pressure unknowns (pressureLocation in
 # NHFOAMProperties): "interface" (layer interfaces, NHWAVE layout; default)
@@ -123,6 +133,51 @@ stillWaterLevel 0;
 pressureLocation {PRESSURE};
 {nh_extra}
 """)
+
+def les_files(case, Ck=0.094, patches=None):
+    """Smagorinsky subgrid model of the OpenFOAM library (LES, filter width
+    the cube root of the cell volume, as in NHWAVE): nu_t = (Cs Delta)^2
+    sqrt(2 S:S) with Cs^2 = Ck sqrt(Ck/Ce), Ce = 1.048 (Ck = 0.094: Cs =
+    0.168).  patches: {name: type} for nut (default: zeroGradient on the
+    surface, bottom and walls, empty frontAndBack)."""
+    write(case, "constant/turbulenceProperties", "dictionary", f"""
+simulationType  LES;
+
+LES
+{{
+    LESModel        Smagorinsky;
+    turbulence      on;
+    printCoeffs     on;
+    delta           cubeRootVol;
+
+    SmagorinskyCoeffs
+    {{
+        Ck              {Ck:g};
+        Ce              1.048;
+    }}
+
+    cubeRootVolCoeffs
+    {{
+        deltaCoeff      1;
+    }}
+}}
+""")
+    if patches is None:
+        patches = {"surface": "zeroGradient", "bottom": "zeroGradient",
+                   "left": "zeroGradient", "right": "zeroGradient",
+                   "frontAndBack": "empty"}
+    bf = "".join(f"    {n}\n    {{\n        type            {t};\n    }}\n"
+                 for n, t in patches.items())
+    write(case, "0/nut", "volScalarField", f"""
+dimensions      [0 2 -1 0 0 0 0];
+
+internalField   uniform 0;
+
+boundaryField
+{{
+{bf}}}
+""")
+
 
 # Convection of momentum: a TVD scheme. linearUpwind loses ~12% of H = 4 cm
 # over 8 wavelengths, limitedLinearV ~3%; central differencing (Gauss linear)
@@ -316,10 +371,11 @@ def beach_profile(xs, hs, film, dx=None):
 
 
 def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0, Ny=1, ygrade=1.0,
-                      ztop=None):
+                      ztop=None, cyclic=False):
     """Piecewise-linear bottom: depth hs[i] at xs[i], one block per segment.
     Ny = 1: 2D (empty frontAndBack, width dy). Ny > 1: 3D channel of width
-    dy with walls 'axis' (y = 0) and 'side' (y = dy). ztop: top of the
+    dy with walls 'axis' (y = 0) and 'side' (y = dy), or with cyclic: the
+    periodic pair 'front' (y = 0) and 'back' (y = dy). ztop: top of the
     mesh per point (default 0; see beach_profile for dry ground)."""
     if ztop is None:
         ztop = [0.0] * len(xs)
@@ -348,6 +404,19 @@ def blockmesh_profile(case, xs, hs, dy, dx, Nz, zgrade=1.0, Ny=1, ygrade=1.0,
     {{
         type empty;
         faces ({' '.join(front + back)});
+    }}"""
+    elif cyclic:
+        sides = f"""    front
+    {{
+        type cyclic;
+        neighbourPatch back;
+        faces ({' '.join(front)});
+    }}
+    back
+    {{
+        type cyclic;
+        neighbourPatch front;
+        faces ({' '.join(back)});
     }}"""
     else:
         sides = f"""    axis

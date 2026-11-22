@@ -30,8 +30,8 @@ the paper's own tests check that our NHWAVE runs reproduce the published ones.
 4.4 & elliptic shoal on a 1:50 slope & 3D refraction and diffraction & \citet{berkhoff1982} & Section~\ref{sec:ma-berkhoff} \\
 4.5 & breaking solitary wave run-up & breaking, wetting and drying & \citet{synolakis1987} & Section~\ref{sec:wd-runup} \\
 4.6 & 3D rigid landslide, $d = 61$ mm & moving bottom, short trailing waves & \citet{enet2007} & Section~\ref{sec:ma-landslide} \\
-4.7 & longshore current on a plane beach & breaking-driven currents & \citet{visser1991} & not yet run \\
--- & surf zone (NHWAVE example \code{tingkirby}) & breaking, set-up & \citet{ting1994} & Section~\ref{sec:wd-tk} \\
+4.7 & longshore current on a plane beach & breaking-driven currents & \citet{visser1991} & Section~\ref{sec:brk-ls} \\
+-- & surf zone (NHWAVE example \code{tingkirby}) & breaking, set-up, undertow & \citet{ting1994} & Sections~\ref{sec:wd-tk}, \ref{sec:brk-spill} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -40,7 +40,9 @@ The tests were run in order of increasing complexity, and each was used to look
 for weaknesses of \NHFOAM\ before moving on. Two of them changed the code and
 its defaults: the standing waves showed that the TVD convection scheme damps
 steep short waves, and the solitary wave showed that the time integration was
-only first order for nonlinear waves (Section~\ref{sec:time}). The elliptic
+only first order for nonlinear waves (Section~\ref{sec:time}). The surf zone
+of \citet{ting1994} later led to the breaking eddy viscosity of
+Section~\ref{sec:brk}, which is used for test 4.7. The elliptic
 shoal showed when the low-dissipation scheme must not be used, and
 Section~\ref{sec:ma-summary} collects all the findings.
 
@@ -411,7 +413,8 @@ submerged bar (Section~\ref{sec:ma-bar}) & phase closer to the lab before the fi
 elliptic shoal (Section~\ref{sec:ma-berkhoff}) & run fails at 35 s in a shallow corner & waves break there; filtered scheme, no breaking model & \code{limitedLinearV} and HFA wherever waves break: the run goes on, same errors \\
 landslide (Section~\ref{sec:ma-landslide}) & trailing waves 1.5--3 times too large & probably the wall that replaces the beach & rerun with the beach (now possible) \\
 run-up (Section~\ref{sec:wd-runup}) & front too slow, $R/d = 0.41$; oscillating swash & centred face depth, interpolated flux at the tip & upwind (TVD) face depth, supercritical upwind flux: $R/d = 0.531$ (NHWAVE 0.512) \\
-surf zone (Section~\ref{sec:wd-tk}) & heights 6 cm too large at $x = 8$ m & too little dissipation behind the hydrostatic front & none yet (NHWAVE: 7 cm) \\
+surf zone (Section~\ref{sec:wd-tk}) & heights 6 cm too large at $x = 8$ m & too little dissipation behind the hydrostatic front & breaking age and eddy viscosity (Section~\ref{sec:brk}): mean surf-zone error $+6.1 \to +3.5$ cm (NHWAVE $+4.8$) \\
+longshore current (Section~\ref{sec:brk-ls}) & breaking region crept into deep water along oblique crests & columns joined at the aged threshold & join at $\beta\sqrt{gD}$ \\
 \bottomrule
 \end{tabular}
 \end{table}

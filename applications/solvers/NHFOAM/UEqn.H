@@ -30,10 +30,18 @@ if (botFrictionDictPtr)
         const label c = fc[i];
         const scalar uh = Foam::sqrt(sqr(U[c].x()) + sqr(U[c].y()));
         const scalar D = max(etaCol[cellCol[c]] - zbCol[cellCol[c]], minDepth);
-        const scalar Cd =
-            botManning > 0
-          ? gMag*sqr(botManning)/Foam::cbrt(D)
-          : botCd;
+        scalar Cd = botCd;
+
+        if (botManning > 0)
+        {
+            Cd = gMag*sqr(botManning)/Foam::cbrt(D);
+        }
+        else if (botKs > 0)
+        {
+            // Log law at the bottom cell centre, z1 half its height
+            const scalar z1 = 0.5*Vc[c]/magSb[i];
+            Cd = sqr(0.41/max(Foam::log(30*z1/botKs), scalar(1)));
+        }
 
         botDrag[c] = Cd*uh*magSb[i]/Vc[c];
     }
@@ -52,6 +60,51 @@ tmp<fvVectorMatrix> tUEqn
   + zoneSigmaU
 );
 fvVectorMatrix& UEqn = tUEqn.ref();
+
+// Breaking eddy viscosity: momentum diffusion through the side faces (and
+// the layer faces with verticalMixing), not through closed faces of dry
+// columns
+if (breakingVisc)
+{
+    surfaceScalarField nuBreakingf
+    (
+        "nuBreakingf",
+        fvc::interpolate(nuBreaking)*brkFaceWeight
+    );
+
+    if (wetDry.active())
+    {
+        const boolList& open = wetDry.faceOpen();
+        scalarField& nf = nuBreakingf.primitiveFieldRef();
+
+        forAll(nf, facei)
+        {
+            if (!open[facei])
+            {
+                nf[facei] = 0;
+            }
+        }
+
+        forAll(mesh.boundary(), patchi)
+        {
+            if (mesh.boundary()[patchi].coupled())
+            {
+                const boolList& open = wetDry.patchFaceOpen()[patchi];
+                scalarField& pnf = nuBreakingf.boundaryFieldRef()[patchi];
+
+                forAll(pnf, i)
+                {
+                    if (!open[i])
+                    {
+                        pnf[i] = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    UEqn -= fvm::laplacian(nuBreakingf, U);
+}
 
 UEqn.relax();
 

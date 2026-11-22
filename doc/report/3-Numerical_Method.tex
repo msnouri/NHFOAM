@@ -180,6 +180,15 @@ the face mobility itself would also scale the non-orthogonal correction on the
 sloping layer faces, i.e.\ the horizontal pressure gradient under a steep
 front, which drives spurious vertical fluxes.
 
+The breaking flags, ages and eddy viscosities are set at the start of each
+time step from $\partial\eta/\partial t = (\eta^n-\eta^{n-1})/\Delta t_0$.
+The flags spread over the neighbouring columns in repeated sweeps until
+nothing changes; on a processor they reach only the local columns. The
+eddy viscosity of a face is the linear interpolate of the column values
+(zero on walls, the free surface and the bottom, and on the closed faces of
+dry columns), and the diffusion term is implicit in $\bm{u}$
+(\code{fvm::laplacian}), so it needs no time-step limit.
+
 \subsection{Time integration}
 \label{sec:time}
 

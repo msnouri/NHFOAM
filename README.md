@@ -14,9 +14,10 @@ function objects.
 > Status: research code. 2DV and 3D, pressure on the layer interfaces as in
 > NHWAVE (2–3 layers resolve dispersion up to kh = 7), second order in time,
 > prescribed seabed motion (tsunami generation, solid landslides),
-> depth-induced breaking with the hydrostatic front approximation, and
-> wetting and drying (moving shorelines, run-up) after NHWAVE. See
-> *Limitations* and *Roadmap* below.
+> depth-induced breaking (hydrostatic front approximation and a breaking
+> eddy viscosity with a breaking age), wetting and drying (moving
+> shorelines, run-up) after NHWAVE, periodic (cyclic) lateral boundaries and
+> wave-averaged output. See *Limitations* and *Roadmap* below.
 >
 > **Report:** the model, its verification and its validation against NHWAVE
 > (following the tests of Ma et al. 2012, with wetting and drying) are
@@ -166,21 +167,43 @@ contains the volume pushed up by the bottom. Two motions are built in:
   law of motion s(t) = s₀ ln cosh(t/t₀) (Grilli & Watts 2005; Enet & Grilli
   2007).
 
-**Breaking: hydrostatic front approximation (HFA).** This follows Smit,
-Zijlema & Stelling (2013). A column starts breaking when
-∂η/∂t > α√(gD) and keeps breaking, or spreads to a neighbouring column, while
-∂η/∂t > β√(gD). Inside breaking columns the non-hydrostatic pressure is
-switched off: the vertical coupling of the column in the pressure matrix is
-multiplied by a large factor (`hydrostaticFactor`). In the interface layout
-this is the coefficient between the two interfaces of each cell, up to the
-surface unknown. In the cell layout it is an extra coupling across the layer
-faces plus a large mobility of the surface face. p_rgh is then uniform in the
-vertical (q = 0, since the surface value is g η), and the fluxes through the
-layer faces follow from continuity. The factor acts on the vertical
-difference of the pressure only. Scaling the face mobility itself would also
-scale the non-orthogonal correction on the sloping layer faces, i.e. the
-horizontal pressure gradient under a steep front, which drives spurious
-vertical fluxes.
+**Breaking.** A column starts breaking when ∂η/∂t > α√(gD) (Smit, Zijlema &
+Stelling 2013), or optionally when the horizontal velocity of its surface
+cell exceeds B_k√(gD) (kinematic onset, B_k = 0.85 after Barthelemy et al.
+2018, with √(gD) as the estimate of the crest speed). It keeps breaking, and
+a neighbouring column joins it, while ∂η/∂t > η_t*. Without `betaFinal`,
+η_t* = β√(gD) as in Smit et al. With `betaFinal`, η_t* falls from β√(gD) to
+β_F√(gD) over the age t − t₀ of the breaking event, T* = T_s√(D/g), as in
+the eddy-viscosity model of Kennedy et al. (2000); a column that joins next
+to an older breaker takes over its age, so the age travels with the wave and
+the breaking region grows over the face of a mature bore. Neighbours include
+columns across cyclic patches, but not across processor boundaries. Two
+treatments act in the breaking columns (`model HFA`, `eddyViscosity` or
+`hybrid` for both):
+
+- *Hydrostatic front approximation (HFA).* The non-hydrostatic pressure is
+  switched off: the vertical coupling of the column in the pressure matrix is
+  multiplied by a large factor (`hydrostaticFactor`). In the interface layout
+  this is the coefficient between the two interfaces of each cell, up to the
+  surface unknown. In the cell layout it is an extra coupling across the
+  layer faces plus a large mobility of the surface face. p_rgh is then
+  uniform in the vertical (q = 0, since the surface value is g η), and the
+  fluxes through the layer faces follow from continuity. The factor acts on
+  the vertical difference of the pressure only. Scaling the face mobility
+  itself would also scale the non-orthogonal correction on the sloping layer
+  faces, i.e. the horizontal pressure gradient under a steep front, which
+  drives spurious vertical fluxes.
+- *Breaking eddy viscosity* (Kennedy et al. 2000). The momentum equation
+  gets ∇·(ν_b∇u) with ν_b = B δ_b² D ∂η/∂t, B = min[max(η_t/η_t* − 1, 0), 1],
+  δ_b = 1.2, uniform over the column. It acts through the side faces
+  (horizontal mixing; `verticalMixing yes` adds the layer faces), not
+  through closed faces of dry columns, and is implicit in u. The
+  non-hydrostatic pressure is kept.
+
+Subgrid turbulence comes from OpenFOAM's turbulence library. The LES
+Smagorinsky model with `delta cubeRootVol` is the model NHWAVE uses for the
+longshore current (Ma et al. 2012): ν_t = (C_s Δ)²√(2S:S) with
+Δ = (Δx Δy Δσ D)^(1/3) and C_s = 0.168 for the default constants.
 
 The wave front then travels as a bore. The conservative momentum equation
 with a TVD convection scheme dissipates its energy.
@@ -273,7 +296,10 @@ works:
 
 Build the bathymetry into the mesh, with the top of the mesh at the still
 water level. The solver detects the columns at start-up and reports
-`Sigma columns: N columns ..., layers per column n`.
+`Sigma columns: N columns ..., layers per column n`. Periodic lateral
+boundaries are pairs of `cyclic` patches (the tutorial `longshoreCurrent`);
+the field files then need their constraint entries,
+`#includeEtc "caseDicts/setConstraintTypes"` in `boundaryField`.
 
 **Layers.** With the interface pressure (the default), uniform layers are
 best: 2 layers keep the period error of standing waves within 0.6% up to
@@ -293,7 +319,10 @@ period error at kh = 5 from 5.8% to 2.1% with 5 layers.
 
 Outputs: `eta`, `q` (non-hydrostatic pressure), `p` (total p/ρ), `p_rgh`, `U`,
 and in the interface layout `pI` (p_rgh on the bottom interface of each
-cell).
+cell); with breaking `breaking` (1 in breaking columns) and `nuBreaking`, and
+with `averaging` the time averages `UMean` and `etaMean` (averaged at fixed
+σ; with uniform layers the layer average of `UMean` in a column is the mean
+depth-averaged velocity).
 
 **`constant/NHFOAMProperties`:**
 
@@ -341,12 +370,23 @@ forcingZones
 Optional entries in the same file:
 
 ```c++
-breaking                     // hydrostatic front approximation
+breaking
 {
-    model       HFA;
+    model       hybrid;      // HFA | eddyViscosity | hybrid (both) | none
+    onset       etaT;        // etaT | kinematic
     alpha       0.6;         // onset:       d(eta)/dt > alpha sqrt(g D)
+    Bkin        0.85;        // kinematic onset: |u_s| > Bkin sqrt(g D)
     beta        0.3;         // persistence: d(eta)/dt > beta  sqrt(g D)
-    hydrostaticFactor 1000;  // extra vertical coupling in breaking columns
+    betaFinal   0.15;        // optional: persistence threshold falls from
+    Tstar       5;           //   beta to betaFinal over Tstar sqrt(D/g)
+    delta       1.2;         // eddy viscosity nu_b = B delta^2 D d(eta)/dt
+    verticalMixing no;       // nu_b also between the layers
+    hydrostaticFactor 1000;  // extra vertical coupling in HFA columns
+}
+
+averaging                    // time averages UMean and etaMean, written
+{                            // with the fields
+    timeStart   95;
 }
 
 wettingDrying                // moving shorelines (pressureLocation interface)
@@ -363,7 +403,9 @@ wettingDrying                // moving shorelines (pressureLocation interface)
 
 bottomFriction               // quadratic bottom stress
 {
-    Cd          0.006;       // or: manning 0.012;
+    Cd          0.006;       // or: manning 0.012;  or: ks 0.0008; (log
+                             // law [kappa/ln(30 z1/ks)]^2 at the centre z1
+                             // of the bottom cell, NHWAVE's Zob)
 }
 
 bottomMotion                 // prescribed seabed motion
@@ -486,8 +528,9 @@ structuredCoeffs { method simple; patches (bottom); simpleCoeffs { n (2 1 1); } 
 | `circularBasin` | **3D unstructured** triangular-prism mesh (gmsh): first sloshing mode of a circular basin |
 | `bottomUplift` | 2DV tsunami generation by a bottom uplift (Hammack 1973 type), `nhMovingSlipVelocity` bottom |
 | `landslide3D` | 3D rigid slide of Enet & Grilli (2007), NTHMP landslide benchmark 2, on a coarse mesh (about 3.5 min on one core); `Allrun-parallel` for 2 processors |
-| `breakingSlope` | Hansen & Svendsen (1979) spilling breakers on a 1:34 slope with the hydrostatic front approximation and a velocity-only sponge (about 8 min) |
+| `breakingSlope` | Hansen & Svendsen (1979) spilling breakers on a 1:34 slope with the hydrostatic front approximation and the breaking eddy viscosity, and a velocity-only sponge (about 8 min) |
 | `beachRunup` | solitary wave (H/d = 0.28) breaking and running up a 1:20 beach with **wetting and drying** (Synolakis 1987; NTHMP benchmark 4; about 40 s); prints the maximum run-up (R/d = 0.52, lab about 0.5) |
+| `longshoreCurrent` | **longshore current** on a 1:20 beach (Visser 1991, case 4; test 4.7 of Ma et al. 2012): oblique stream-function waves, periodic alongshore, breaking eddy viscosity, Smagorinsky model, log-law friction, wetting and drying, time-averaged velocity (48 000 cells, 100 s; about 1.5 h on one core) |
 
 Each case runs with `./Allrun` and cleans with `./Allclean`. `validation/`
 holds the scripts used to generate cases and make the figures below
@@ -826,12 +869,13 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | 4.4 elliptic shoal on a 1:50 slope | Berkhoff et al. (1982) | 6.4 |
 | 4.5 breaking solitary wave run-up | Synolakis (1987) | 6.6 |
 | 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 6.5 (and 5.5) |
-| 4.7 longshore current on a plane beach | Visser (1991) | not yet run |
-| (NHWAVE example) surf zone | Ting & Kirby (1994) | 6.6 |
+| 4.7 longshore current on a plane beach | Visser (1991) | 6.8 |
+| (NHWAVE example) surf zone | Ting & Kirby (1994) | 6.6, 6.7 |
 
-Two of the tests changed the code and its defaults: the standing waves
-showed that the TVD scheme damps steep short waves, and the solitary wave
-that the time integration was only first order for nonlinear waves.
+Three of the tests changed the code and its defaults: the standing waves
+showed that the TVD scheme damps steep short waves, the solitary wave that
+the time integration was only first order for nonlinear waves, and the surf
+zone of Ting & Kirby that the bores need a breaking eddy viscosity (6.7).
 
 ### 6.1 Standing wave in a closed basin
 
@@ -1028,9 +1072,102 @@ columns of the sawtooth bores are flagged as breaking: keeping columns
 breaking down to β = 0.1 cuts the error by a third, and q = 0 in all columns
 shallower than 0.23 m leaves +2.8 cm. Hydrostatic bores themselves are right
 (a dam break onto a 2 cm bed matches Stoker's bore within about 1%). The
-dissipation behind the hydrostatic front is the next thing to fix.
+dissipation behind the hydrostatic front is addressed in 6.7.
 
 ![Ting and Kirby](doc/figures/tk_spilling.png)
+
+### 6.7 Breaking with a breaking age and an eddy viscosity
+
+The breaking model of section 1 adds two ingredients of Kennedy et al.
+(2000) to the HFA: a persistence threshold that falls with the age of the
+breaking event (β = 0.3 → β_F = 0.15 over T* = 5√(D/g)), so that the
+breaking region grows over the face of a mature bore, and the breaking eddy
+viscosity ν_b = B δ_b² D ∂η/∂t (δ_b = 1.2). Ting & Kirby's beach as in 6.6,
+now with the time averages of the last 10 periods for the undertow (cm;
+undertow: strongest offshore velocity below the trough relative to the
+measured one, stations x > 6.5 m):
+
+| | largest H, at x | H at 8 m | H at 11 m | mean error of H, x > 7 m | mean level at 11 m | undertow |
+|---|---|---|---|---|---|---|
+| lab | 16.5, 6.0 m | 9.3 | 3.9 | | 1.4 | 1 |
+| HFA | 17.3, 6.4 m | 15.3 | 10.0 | +6.1 | 0.5 | 1.03 |
+| HFA, breaking age | 17.2, 6.5 m | 14.9 | 9.8 | +5.8 | 0.6 | 0.91 |
+| **HFA + eddy viscosity** (`hybrid`, default) | 17.6, 6.2 m | 12.9 | 6.6 | **+3.5** | 0.8 | 1.32 |
+| … with vertical mixing | 17.7, 6.3 m | 13.4 | 8.1 | +4.4 | 1.1 | 0.65 |
+| eddy viscosity alone (vertical mixing) | 18.0, 6.5 m | 13.2 | 8.0 | +4.1 | 1.2 | 0.62 |
+| kinematic onset, B_k = 0.85 | 21.1, 7.1 m | 13.0 | 5.3 | +3.1 | 0.9 | 1.38 |
+| NHWAVE (k–ε, 20 layers) | 18.0, 6.9 m | 16.1 | 6.4 | +4.8 | 0.0 | 1.63 |
+
+The eddy viscosity nearly halves the surf-zone error of the HFA and brings it
+below NHWAVE's. With horizontal mixing (the default) the undertow keeps the
+measured S-shape, 30% too strong (NHWAVE 60%); mixing through the layer
+faces as well makes it nearly uniform over the depth and dissipates less.
+The breaking age alone (a larger hydrostatic region) changes little, and the
+eddy viscosity without the HFA is close to the hybrid with vertical mixing:
+the dissipation comes from ν_b. The kinematic onset with B_k = 0.85 breaks
+1.1 m late at 21 cm (√(gD) overestimates the crest speed), which its mean
+error inside the surf zone hides. All variants still lose too little height
+just after the breaking point (x = 6.4–8 m: lab −6.9 cm, with the eddy
+viscosity −4.2 to −4.6 cm, HFA −2.0 cm, NHWAVE −1.3 cm); further in, the
+decay rates are close to the measured one. Columns join a breaker above
+β√(gD), the threshold of a new breaker. Joining at the lower threshold of an
+old breaker cut the error of the run with vertical mixing from +4.4 to
++3.5 cm here, but on the beach of 6.8 the breaking region then crept along
+the crests of the oblique waves into deep water.
+
+![breaking](doc/figures/tk_breaking.png)
+
+![undertow](doc/figures/tk_undertow.png)
+
+On the spilling breakers of Hansen & Svendsen (5.6, test 061071), the default
+nearly halves the rms error of H in the surf zone (x > 8.3 m: 2.98 → 1.54 cm; −19%
+to +49% of the measured heights instead of +3% to +99%) and of the mean
+water level (4.6 → 2.2 mm), with the same error before breaking (0.56 cm);
+it breaks 0.6 m early, with the largest height 0.3 cm low.
+
+![Hansen and Svendsen](doc/figures/hs_breaking.png)
+
+### 6.8 Longshore current on a plane beach (test 4.7)
+
+Visser (1991), experiment 4, is the last test of Ma et al. (2012): regular
+waves (H = 7.8 cm, T = 1.02 s, 15.4° from the shore normal at h = 0.35 m)
+break on a smooth 1:20 beach and drive a longshore current. Measurements:
+Visser's case 4 as tabulated by Kraus & Larson (1991, NMLONG, Table B3).
+`validation/longshore.py` writes both models' cases, `plot_longshore.py`
+makes the figures; the tutorial `longshoreCurrent` is the NHFOAM run.
+
+Both models are periodic alongshore over one alongshore wavelength,
+L_y = 2π/(k sin θ), with 5 uniform layers, log-law friction with k_s = 0.8 mm
+(Ma et al.'s tuned value), the Smagorinsky model with Δ = (Δx Δy Δσ D)^(1/3)
+and C_s = 0.168 (OpenFOAM's LES library; NHWAVE `IVTURB = 20`), a 5 mm film,
+100 s, statistics over the last 5 periods. Ma et al. used 280 × 128 cells;
+here both run on the same coarser grid, Δx = 4 cm with 40 (NHFOAM) or 32
+(NHWAVE, a power of two for its periodic boundaries) cells alongshore,
+about 70 min on one core each. NHFOAM makes stream-function waves in a 1.5 m
+relaxation zone; NHWAVE uses its linear wavemaker at the boundary.
+
+| | H at 2.41 m (cm) | H at 1.21 m (cm) | mean level at the shoreline (cm) | largest V (m/s), at (m) | rms error H (cm) | rms error V (m/s) |
+|---|---|---|---|---|---|---|
+| lab | 8.7 | 2.6 | 1.6 | 0.39, 1.21 | | |
+| **NHFOAM, HFA + eddy viscosity** | 7.1 | 5.0 | 1.2 | 0.265, 1.08 | 1.3 | 0.074 |
+| … with vertical mixing | 7.1 | 4.8 | 1.2 | 0.258, 1.48 | 1.2 | 0.071 |
+| NHFOAM, HFA | 7.7 | 6.4 | 1.1 | 0.186, 0.68 | 1.9 | 0.123 |
+| NHWAVE | 6.2 | 4.2 | 0.7 | 0.250, 1.26 | 1.3 | 0.082 |
+
+NHFOAM's waves start breaking 2.85 m from the shoreline, 0.35 m seaward of
+Visser's breaker line, at 7.9 cm instead of 8.7 cm, and stay too high inside
+the surf zone (as in 6.7); NHWAVE's lose height before breaking on this
+grid. Both models put the current at about the measured position but give
+two thirds of its strength. With the HFA alone the current is weaker and its
+peak sits near the shoreline, as Ma et al. found without turbulent diffusion;
+the eddy viscosity mixes the current across the surf zone. The current is
+uniform alongshore and still grows by about 2% per 10 s at 100 s. Ma et al.
+report the current well predicted on their finer grid, so the resolution is
+the likely main cause of the deficit both models share here.
+
+![longshore snapshot](doc/figures/longshore_snapshot.png)
+
+![longshore current](doc/figures/longshore.png)
 
 ## 7. Limitations (this version)
 
@@ -1039,12 +1176,17 @@ dissipation behind the hydrostatic front is the next thing to fix.
   thin swash flows run slower than over a truly dry bed, and puddles of a
   few millimetres above the film stay on the beach in the backwash. A narrow
   cell at the shoreline raises the errors. It needs the interface pressure.
-- **Breaking (HFA).** Tested on two beaches (5.6, 6.6). The breaking point is
-  within 0.1–0.5 m of the measured one, but the bores lose too little energy
-  in the surf zone: the wave heights there are up to twice the measured ones
-  (6 cm too large at x = 8 m on Ting & Kirby's beach, where NHWAVE is 7 cm
-  too large). Breaking columns spread only to neighbours on the same
-  processor.
+- **Breaking.** Tested on two spilling-breaker beaches and the longshore
+  current (6.7, 6.8). With the eddy viscosity the decay inside the surf zone
+  is close to the measured one, but just after the breaking point the models
+  lose too little height (3.5–4 cm too much at x = 8 m on Ting & Kirby's
+  beach), and the breaking point is 0.2–0.6 m from the measured one. The
+  parameters are those of Smit et al. (2013) and Kennedy et al. (2000), not
+  tuned. The kinematic onset needs a better crest-speed estimate than
+  √(gD). Breaking columns spread only to neighbours on the same processor.
+- **Longshore current** (test 4.7) has been run on a grid three to four
+  times coarser alongshore than Ma et al.'s. There both NHFOAM and NHWAVE
+  give two thirds of the measured current, at about the right place.
 - **Wave generation** is by relaxation zones with linear or stream-function
   targets. There is no boundary wavemaker and no irregular input.
 - **Restarts** do not save the BDF2 history of η or Uf. The first step after
@@ -1074,17 +1216,20 @@ convecting flux) and filtered central convection for non-breaking waves.
 Then wetting and drying (thin-film mask after NHWAVE, conservative
 positivity limiter, upwind/TVD face depths, supercritical upwind fluxes),
 quadratic bottom friction and stream-function wave generation, with the
-run-up of test 4.5 and the surf zone of Ting & Kirby (6.6).
+run-up of test 4.5 and the surf zone of Ting & Kirby (6.6). Then the
+breaking age and breaking eddy viscosity (Kennedy et al. 2000) with the
+kinematic onset option, periodic lateral boundaries, log-law friction and
+time averaging, with Ting & Kirby's undertow (6.7) and the longshore current
+of test 4.7 (6.8).
 
 The comparisons with NHWAVE and REEF3D::NHFLOW (sections 5 and 6) set the
 order:
 
-1. Breaking: the dissipation of the bores behind the hydrostatic front (a
-   breaking region that covers the roller, or an eddy viscosity there), a
-   kinematic B = u/c onset trigger, and stabilised k–ω (Larsen & Fuhrman
-   2018) for many-layer runs; Ting & Kirby's undertow.
-2. Test 4.7 (longshore current, 3D wetting and drying) and the landslide of
-   6.5 with its beach.
+1. Breaking: the transition just after the breaking point, a crest-speed
+   estimate for the kinematic B = u/c onset, and stabilised k–ω (Larsen &
+   Fuhrman 2018) for many-layer runs; the longshore current on Ma et al.'s
+   grid.
+2. The landslide of 6.5 with its beach.
 3. Steady long runs: volume-conserving wave-making zones (with a return
    current for the Stokes drift, as in a closed flume) and absorbing zones
    that also take out the long waves of the flume (see 5.4).
@@ -1156,6 +1301,17 @@ order:
 - Larsen, B.E., Fuhrman, D.R. (2018). On the over-production of turbulence
   beneath surface waves in Reynolds-averaged Navier–Stokes models. *JFM* 853,
   419–460.
+- Kennedy, A.B., Chen, Q., Kirby, J.T., Dalrymple, R.A. (2000). Boussinesq
+  modeling of wave transformation, breaking, and runup. I: 1D. *J. Waterway,
+  Port, Coastal, Ocean Eng.* 126, 39–47.
+- Barthelemy, X., Banner, M.L., Peirson, W.L., Fedele, F., Allis, M., Dias,
+  F. (2018). On a unified breaking onset threshold for gravity waves in deep
+  and intermediate depth water. *JFM* 841, 463–488.
+- Kraus, N.C., Larson, M. (1991). NMLONG: Numerical model for simulating the
+  longshore current. Report 1: Model development and tests. Technical Report
+  DRP-91-1, US Army Engineer Waterways Experiment Station.
+- Chen, Q., Kirby, J.T., Dalrymple, R.A., Shi, F., Thornton, E.B. (2003).
+  Boussinesq modeling of longshore currents. *JGR* 108(C11), 3362.
 
 ## License
 

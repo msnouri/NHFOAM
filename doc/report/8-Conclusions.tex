@@ -44,6 +44,27 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         Stoker's solution for it, not Ritter's. Parallel runs give the same
         run-up with a processor boundary in the swash zone (0.540 against
         0.531).
+  \item \textbf{Breaking.} The HFA alone flags only the fronts of the
+        bores. A persistence threshold that falls with the age of the
+        breaking event and the breaking eddy viscosity of
+        \citet{kennedy2000}, with horizontal mixing, nearly halve the
+        surf-zone errors of the wave height on both spilling-breaker beaches (mean
+        error $+6.1 \to +3.5$ cm on the beach of \citet{ting1994}, NHWAVE
+        $+4.8$; rms $2.98 \to 1.54$ cm on that of \citet{hansen1979}), raise
+        the set-up, and keep the measured shape of the undertow, which is
+        30\% too strong (NHWAVE 60\%). Vertical mixing through the layer
+        faces flattens the undertow and dissipates less. In 3D, columns
+        must join a breaker at the threshold of a new breaker, or the
+        breaking region creeps along oblique crests into deep water.
+  \item \textbf{Longshore current.} Test 4.7 of \citet{ma2012}, in 3D
+        with periodic lateral boundaries, wetting and drying, log-law
+        friction and the Smagorinsky model, runs with both models on the
+        same coarse grid. Both put the current at about the measured
+        position (\NHFOAM: 0.265 m/s at 1.08 m from the shoreline, NHWAVE:
+        0.250 m/s at 1.26 m, lab 0.39 m/s at 1.21 m) and give two thirds of
+        its strength. With the HFA alone the current is 0.19 m/s and too
+        close to the shoreline, as \citet{ma2012} found without turbulent
+        diffusion.
 \end{itemize}
 
 \paragraph{Limitations.}
@@ -54,12 +75,16 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         well), and puddles of a few millimetres above the film stay on the
         beach in the backwash. A narrow cell at the shoreline raises the
         errors. It needs the interface pressure layout.
-  \item \textbf{Breaking} has been tested on two cases. The onset is about
-        right, but in the surf zone the bores lose too little energy: the
-        heights are up to twice the measured ones \citep{hansen1979}, and
-        6 cm too large at $x = 8$ m on the beach of \citet{ting1994}, where
-        NHWAVE is 7 cm too large. Only the front columns are hydrostatic, and
-        the non-hydrostatic pressure behind them keeps the bores steep.
+  \item \textbf{Breaking} has been tested on two spilling-breaker beaches
+        and the longshore current. With the eddy viscosity the decay inside
+        the surf zone is close to the measured one, but just after the
+        breaking point the models lose too little height (the heights are
+        3.5--4 cm too large at $x = 8$ m on the beach of \citet{ting1994}),
+        the breaking point is 0.2--0.6 m from the measured one, and the
+        parameters
+        ($\alpha$, $\beta$, $\beta_F$, $T_s$, $\delta_b$) are those of
+        \citet{smit2013} and \citet{kennedy2000}, not tuned. The kinematic
+        onset needs a better estimate of the crest speed than $\sqrt{gD}$.
         Breaking columns spread only to neighbours on the same processor.
   \item \textbf{Wave generation} uses relaxation zones with linear or
         stream-function targets. There is no boundary wavemaker and no
@@ -77,14 +102,11 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 
 \paragraph{Plans.} In order of priority:
 \begin{enumerate}[nosep]
-  \item breaking: the dissipation of the bores behind the hydrostatic front
-        (a breaking region that covers the roller, or an eddy viscosity there),
-        a kinematic onset criterion and stabilised $k$--$\omega$
-        \citep{larsen2018} for many-layer runs, tested on the beach of
-        \citet{ting1994} with its undertow;
-  \item test 4.7 of \citet{ma2012} (longshore current, 3D wetting and
-        drying) and the landslide of Section~\ref{sec:ma-landslide} with its
-        beach;
+  \item breaking: the transition just after the breaking point, the crest
+        speed of the kinematic onset, and stabilised $k$--$\omega$
+        \citep{larsen2018} for many-layer runs; the longshore current on the
+        grid of \citet{ma2012};
+  \item the landslide of Section~\ref{sec:ma-landslide} with its beach;
   \item volume-conserving wave-making zones and absorption of long waves;
   \item irregular wave generation and a boundary wavemaker;
   \item depth-integrated granular slides for landslide tsunamis;

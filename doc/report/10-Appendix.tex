@@ -25,7 +25,10 @@ mesh, or gmsh (\code{Extrude} with \code{Layers} and \code{Recombine}) followed
 by \code{gmshToFoam}. The bathymetry is built into the mesh, with the top of
 the mesh at the still-water level. Uniform layers are best with the interface
 pressure (Section~\ref{sec:dispersion}): two layers keep the period error within
-0.6\% up to $kh = 7$, three layers within 0.21\%.
+0.6\% up to $kh = 7$, three layers within 0.21\%. Periodic lateral boundaries
+are pairs of \code{cyclic} patches; the fields then need their constraint
+entries (\code{\#includeEtc "caseDicts/setConstraintTypes"} in
+\code{boundaryField}).
 
 \begin{table}[ht]
 \centering
@@ -80,7 +83,17 @@ forcingZones
     }
 }
 
-breaking { model HFA; alpha 0.6; beta 0.3; hydrostaticFactor 1000; }
+breaking
+{
+    model       hybrid;       // HFA | eddyViscosity | hybrid | none
+    onset       etaT;         // etaT | kinematic (|u_s| > Bkin sqrt(gD))
+    alpha       0.6;  beta 0.3;  Bkin 0.85;
+    betaFinal   0.15; Tstar 5;   // threshold falling with the breaking age
+    delta       1.2;  verticalMixing no;    // eddy viscosity
+    hydrostaticFactor 1000;
+}
+
+averaging { timeStart 95; }   // UMean, etaMean from t = 95 s
 
 wettingDrying                 // needs pressureLocation interface
 {
@@ -92,7 +105,7 @@ wettingDrying                 // needs pressureLocation interface
     hydrostaticDepth 0;       // q = 0 in columns shallower than this
 }
 
-bottomFriction { Cd 0.006; }  // or { manning 0.012; }
+bottomFriction { Cd 0.006; }  // or { manning 0.012; } or { ks 0.0008; }
 
 bottomMotion                  // uplift, or slide (see the source)
 {

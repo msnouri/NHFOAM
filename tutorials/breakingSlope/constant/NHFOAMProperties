@@ -189,9 +189,12 @@ forcingZones
 
 breaking
 {
-    model       HFA;
+    model       hybrid;     // hydrostatic front and breaking eddy viscosity
     alpha       0.6;
     beta        0.3;
+    betaFinal   0.15;       // persistence threshold falling with the
+    Tstar       5;          // breaking age
+    delta       1.2;
 }
 
 // ************************************************************************* //

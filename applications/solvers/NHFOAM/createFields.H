@@ -311,43 +311,126 @@ const scalar volume0 =
     gSum(columns.columnArea()*(etaCol - columns.columnBottomZ()));
 
 
-// Wave breaking: hydrostatic front approximation (Smit et al. 2013)
-//     breaking  { model HFA; alpha 0.6; beta 0.3; hydrostaticFactor 1000; }
-// A column starts breaking when d(eta)/dt > alpha sqrt(g D) and keeps (or
-// spreads to a neighbouring column) while d(eta)/dt > beta sqrt(g D).
-// In breaking columns the non-hydrostatic pressure is suppressed by coupling
-// the cells of the column (and the surface face) with a large vertical
-// mobility in the pressure equation, so p_rgh stays uniform in the vertical
-// (hydrostatic) and the fluxes through the layer faces follow from
-// continuity.
+// Wave breaking (updateBreaking.H)
+//     breaking
+//     {
+//         model       HFA;    // none | HFA | eddyViscosity | hybrid
+//         onset       etaT;   // etaT | kinematic
+//         alpha       0.6;    // onset: d(eta)/dt > alpha sqrt(g D)
+//         Bkin        0.85;   // kinematic onset: |u_s| > Bkin sqrt(g D)
+//         beta        0.3;    // persistence: d(eta)/dt > beta sqrt(g D)
+//         betaFinal   0.15;   // optional: persistence threshold falling
+//         Tstar       5;      //   from beta to betaFinal over the breaking
+//                             //   age T* = Tstar sqrt(D/g)
+//         delta       1.2;    // eddy viscosity mixing length
+//         verticalMixing no;  // eddy viscosity also between the layers
+//         hydrostaticFactor 1000;
+//     }
+// A column starts breaking at the onset criterion and keeps breaking while
+// d(eta)/dt stays above the persistence threshold; a neighbouring column
+// joins (with the breaker's age) while d(eta)/dt > beta sqrt(g D).
+//   HFA            hydrostatic front approximation (Smit et al. 2013): in
+//                  breaking columns the non-hydrostatic pressure is
+//                  suppressed by coupling the cells of the column (and the
+//                  surface face) with a large vertical mobility in the
+//                  pressure equation, so p_rgh stays uniform in the vertical
+//                  and the fluxes through the layer faces follow from
+//                  continuity.
+//   eddyViscosity  breaking eddy viscosity after Kennedy et al. (2000),
+//                  nu_b = B delta^2 D d(eta)/dt in the breaking columns,
+//                  B = min(max(d(eta)/dt/eta_t* - 1, 0), 1) with eta_t* the
+//                  persistence threshold, as momentum diffusion through the
+//                  side faces (and the layer faces with verticalMixing); the
+//                  non-hydrostatic pressure is kept.
+//   hybrid         both.
 const dictionary breakingDict(nhProperties.subOrEmptyDict("breaking"));
 const word breakingModel
 (
     breakingDict.getOrDefault<word>("model", "none")
 );
-const bool hfa(breakingModel == "HFA");
 
-if (breakingModel != "none" && !hfa)
+if
+(
+    breakingModel != "none" && breakingModel != "HFA"
+ && breakingModel != "eddyViscosity" && breakingModel != "hybrid"
+)
 {
     FatalIOErrorInFunction(nhProperties)
         << "Unknown breaking model " << breakingModel
-        << ". Valid: none HFA" << exit(FatalIOError);
+        << ". Valid: none HFA eddyViscosity hybrid" << exit(FatalIOError);
 }
 
+const bool breakingOn(breakingModel != "none");
+const bool hfa(breakingModel == "HFA" || breakingModel == "hybrid");
+const bool breakingVisc
+(
+    breakingModel == "eddyViscosity" || breakingModel == "hybrid"
+);
+
+const word breakingOnset
+(
+    breakingDict.getOrDefault<word>("onset", "etaT")
+);
+
+if (breakingOnset != "etaT" && breakingOnset != "kinematic")
+{
+    FatalIOErrorInFunction(nhProperties)
+        << "Unknown breaking onset " << breakingOnset
+        << ". Valid: etaT kinematic" << exit(FatalIOError);
+}
+
+const bool kinematicOnset(breakingOnset == "kinematic");
 const scalar hfaAlpha(breakingDict.getOrDefault<scalar>("alpha", 0.6));
+const scalar brkBkin(breakingDict.getOrDefault<scalar>("Bkin", 0.85));
 const scalar hfaBeta(breakingDict.getOrDefault<scalar>("beta", 0.3));
+const bool brkAgeing(breakingDict.found("betaFinal"));
+const scalar brkBetaFinal
+(
+    breakingDict.getOrDefault<scalar>("betaFinal", hfaBeta)
+);
+const scalar brkTstar(breakingDict.getOrDefault<scalar>("Tstar", 5));
+const scalar brkDelta(breakingDict.getOrDefault<scalar>("delta", 1.2));
+const bool brkVertical
+(
+    breakingDict.getOrDefault<bool>("verticalMixing", false)
+);
 const scalar hfaFactor
 (
     breakingDict.getOrDefault<scalar>("hydrostaticFactor", 1000)
 );
 
-if (hfa)
+if (breakingOn)
 {
-    Info<< "Wave breaking: hydrostatic front approximation, alpha "
-        << hfaAlpha << ", beta " << hfaBeta << nl << endl;
+    Info<< "Wave breaking: " << breakingModel << ", onset ";
+    if (kinematicOnset)
+    {
+        Info<< "|u_s| > " << brkBkin << " sqrt(g D)";
+    }
+    else
+    {
+        Info<< "d(eta)/dt > " << hfaAlpha << " sqrt(g D)";
+    }
+    Info<< ", persistence d(eta)/dt > ";
+    if (brkAgeing)
+    {
+        Info<< "(" << hfaBeta << " to " << brkBetaFinal << " over "
+            << brkTstar << " sqrt(D/g)) sqrt(g D)";
+    }
+    else
+    {
+        Info<< hfaBeta << " sqrt(g D)";
+    }
+    if (breakingVisc)
+    {
+        Info<< ", eddy viscosity delta " << brkDelta
+            << (brkVertical ? " (horizontal and vertical)" : " (horizontal)");
+    }
+    Info<< nl << endl;
 }
 
 boolList colBreaking(columns.nColumns(), false);
+scalarField colAge(columns.nColumns(), 0);
+scalarField colNuB(columns.nColumns(), 0);
 
 volScalarField breaking
 (
@@ -357,12 +440,65 @@ volScalarField breaking
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        hfa ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
+        breakingOn ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
     ),
     mesh,
     dimensionedScalar("zero", dimless, 0),
     zeroGradientFvPatchScalarField::typeName
 );
+
+// Breaking eddy viscosity in the cells, and the face weights of its
+// diffusion: 1 on the side faces (including coupled patches), 1 or 0 on the
+// layer faces, 0 on the other boundaries
+volScalarField nuBreaking
+(
+    IOobject
+    (
+        "nuBreaking",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        breakingVisc ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimViscosity, 0),
+    zeroGradientFvPatchScalarField::typeName
+);
+
+surfaceScalarField brkFaceWeight
+(
+    IOobject
+    (
+        "brkFaceWeight",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimless, 0)
+);
+
+if (breakingVisc)
+{
+    scalarField& w = brkFaceWeight.primitiveFieldRef();
+    w = 1;
+
+    const labelListList& lf = columns.columnLayerFaces();
+    forAll(lf, coli)
+    {
+        forAll(lf[coli], i)
+        {
+            w[lf[coli][i]] = (brkVertical ? 1 : 0);
+        }
+    }
+
+    forAll(mesh.boundary(), patchi)
+    {
+        brkFaceWeight.boundaryFieldRef()[patchi] =
+            (mesh.boundary()[patchi].coupled() ? 1 : 0);
+    }
+}
 
 
 // Vertical location of the pressure unknowns
@@ -509,21 +645,37 @@ volScalarField::Internal wdSink
 scalarField dryFlag(mesh.nCells(), 0);
 
 // Quadratic bottom friction on the bottom cells,
-//     tau_b/rho = Cd |u_h| u   (Cd constant, or g n^2/D^(1/3) with Manning n)
-// applied as an implicit sink Cd |u_h| A_b/V in the bottom cells
+//     tau_b/rho = Cd |u_h| u
+// with Cd constant (Cd), g n^2/D^(1/3) (Manning n, manning) or the log law
+// [kappa/ln(30 z1/ks)]^2 at the bottom cell centre z1 (roughness height ks,
+// as NHWAVE's Zob), applied as an implicit sink Cd |u_h| A_b/V in the bottom
+// cells
 const dictionary* botFrictionDictPtr =
     nhProperties.findDict("bottomFriction");
 scalar botCd = 0;
 scalar botManning = 0;
+scalar botKs = 0;
 
 if (botFrictionDictPtr)
 {
     botCd = botFrictionDictPtr->getOrDefault<scalar>("Cd", 0);
     botManning = botFrictionDictPtr->getOrDefault<scalar>("manning", 0);
+    botKs = botFrictionDictPtr->getOrDefault<scalar>("ks", 0);
 
-    Info<< "Bottom friction: "
-        << (botManning > 0 ? "Manning n = " : "Cd = ")
-        << (botManning > 0 ? botManning : botCd) << nl << endl;
+    Info<< "Bottom friction: ";
+    if (botManning > 0)
+    {
+        Info<< "Manning n = " << botManning;
+    }
+    else if (botKs > 0)
+    {
+        Info<< "log law, ks = " << botKs;
+    }
+    else
+    {
+        Info<< "Cd = " << botCd;
+    }
+    Info<< nl << endl;
 }
 
 volScalarField::Internal botDrag
@@ -539,6 +691,59 @@ volScalarField::Internal botDrag
     mesh,
     dimensionedScalar("zero", dimless/dimTime, 0)
 );
+
+// Time averages from timeStart on (endTimeStep.H), written with the fields:
+//     averaging { timeStart 95; }
+// UMean (cells; with uniform sigma layers the layer average of a column is
+// the mean depth-averaged velocity) and etaMean
+const dictionary* avgDictPtr = nhProperties.findDict("averaging");
+const scalar avgStart
+(
+    avgDictPtr ? avgDictPtr->get<scalar>("timeStart") : GREAT
+);
+scalar avgTime = 0;
+
+autoPtr<volVectorField> UMeanPtr;
+autoPtr<volScalarField> etaMeanPtr;
+
+if (avgDictPtr)
+{
+    UMeanPtr.reset
+    (
+        new volVectorField
+        (
+            IOobject
+            (
+                "UMean",
+                runTime.timeName(),
+                mesh,
+                IOobject::NO_READ,
+                IOobject::AUTO_WRITE
+            ),
+            mesh,
+            dimensionedVector(dimVelocity, Zero)
+        )
+    );
+    etaMeanPtr.reset
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "etaMean",
+                runTime.timeName(),
+                mesh,
+                IOobject::NO_READ,
+                IOobject::AUTO_WRITE
+            ),
+            mesh,
+            dimensionedScalar(dimLength, Zero)
+        )
+    );
+
+    Info<< "Time averages UMean, etaMean from t = " << avgStart << nl
+        << endl;
+}
 
 // Shoreline record (wetting and drying): time, wet columns, highest wet
 // bed, highest free surface over ground above the still-water level

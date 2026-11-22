@@ -65,9 +65,11 @@ no-slip condition. When the bottom moves, the boundary condition
 and leaves it free to slip tangentially, so that the flux through the bottom
 faces equals their swept volume. A quadratic bottom stress,
 $\bm{\tau}_b/\rho = C_d\,|\bm{u}_b|\,\bm{u}_b$ with $\bm{u}_b$ the velocity of
-the bottom cell and $C_d$ constant or $g n^2/D^{1/3}$ from a Manning coefficient,
-can be added. Lateral boundaries are walls, symmetry planes or the outer edges
-of relaxation zones. Moving shorelines (wetting and drying) are described in
+the bottom cell and $C_d$ constant, $g n^2/D^{1/3}$ from a Manning coefficient,
+or $[\kappa/\ln(30z_1/k_s)]^2$ from the log law at the centre $z_1$ of the
+bottom cell with roughness height $k_s$ (NHWAVE's \code{Zob}), can be added.
+Lateral boundaries are walls, symmetry planes, the outer edges of relaxation
+zones or periodic (cyclic) pairs. Moving shorelines (wetting and drying) are described in
 Section~\ref{sec:wd}.
 
 \subsection{Wave generation and absorption}
@@ -113,14 +115,55 @@ bottom. Two motions are built in.
         initial acceleration.
 \end{itemize}
 
-\subsection{Breaking: hydrostatic front approximation}
+\subsection{Breaking}
 \label{sec:hfa}
 
-Following \citet{smit2013}, a column starts breaking when
-$\partial\eta/\partial t > \alpha\sqrt{gD}$, with $D$ the local depth, and keeps
-breaking, or spreads to a neighbouring column, while
-$\partial\eta/\partial t > \beta\sqrt{gD}$ (defaults $\alpha=0.6$, $\beta=0.3$).
-In breaking columns the non-hydrostatic pressure is switched off, so the wave
-front travels as a hydrostatic bore and the conservative momentum equation
-with a shock-capturing (TVD) convection scheme dissipates its energy. How $q$
-is switched off is described in Section~\ref{sec:numhfa}.
+A column starts breaking when its surface rises fast,
+\begin{equation}
+\frac{\partial\eta}{\partial t} > \alpha\sqrt{gD},
+\label{eq:onset}
+\end{equation}
+with $D$ the local depth, or, optionally, when the horizontal velocity of its
+surface cell exceeds a fraction of the crest speed, estimated by $\sqrt{gD}$:
+$|\bm{u}_s| > B_k\sqrt{gD}$ (kinematic onset; $B_k = 0.85$, the ratio $U/C$
+at the onset of breaking found by \citet{barthelemy2018}). A breaking column
+keeps breaking, and a neighbouring column joins it, while
+\begin{equation}
+\frac{\partial\eta}{\partial t} > \eta_t^*,\qquad
+\eta_t^* = \left[\beta + (\beta_F - \beta)\min\!\left(\frac{t-t_0}{T^*},1\right)\right]\sqrt{gD},
+\qquad T^* = T_s\sqrt{D/g}.
+\label{eq:persist}
+\end{equation}
+Without $\beta_F$ the threshold is the constant $\beta\sqrt{gD}$ of
+\citet{smit2013} ($\alpha = 0.6$, $\beta = 0.3$). With $\beta_F$ it falls with
+the age $t-t_0$ of the breaking event, as in the eddy-viscosity model of
+\citet{kennedy2000} ($\beta_F = 0.15$, $T_s = 5$; Kennedy et al.\ start at the
+onset threshold, $\beta = \alpha$). A column that joins next to an older
+breaker takes over its age, so the age travels with the wave and the
+breaking region grows from the front over the whole face of a mature bore.
+Neighbours include the columns across cyclic patches. Two treatments act in
+the breaking columns, alone or together (\code{model HFA},
+\code{eddyViscosity} or \code{hybrid}).
+\begin{itemize}[nosep]
+  \item \textbf{Hydrostatic front approximation} \citep{smit2013}. The
+        non-hydrostatic pressure is switched off, so the wave front travels as
+        a hydrostatic bore and the conservative momentum equation with a
+        shock-capturing (TVD) convection scheme dissipates its energy. How $q$
+        is switched off is described in Section~\ref{sec:numhfa}.
+  \item \textbf{Breaking eddy viscosity} \citep{kennedy2000}. The momentum
+        equation gets the diffusion term $\nabla\cdot(\nu_b\nabla\bm{u})$ with
+        \begin{equation}
+        \nu_b = B\,\delta_b^2\,D\,\frac{\partial\eta}{\partial t},\qquad
+        B = \min\!\left[\max\!\left(\frac{\partial\eta/\partial t}{\eta_t^*}-1,\,0\right),1\right],
+        \label{eq:nub}
+        \end{equation}
+        $\delta_b = 1.2$, uniform over the depth of the column. It acts through
+        the side faces of the columns (horizontal mixing), optionally also
+        through the layer faces (\code{verticalMixing}), and not through the
+        closed faces of dry columns. The non-hydrostatic pressure is kept.
+\end{itemize}
+Subgrid turbulence can be added with OpenFOAM's turbulence library. The
+Smagorinsky model of the LES library with the filter width $V^{1/3}$ of the
+cell is the model NHWAVE uses for the longshore current \citep{ma2012},
+$\nu_t = (C_s\Delta)^2\sqrt{2S_{ij}S_{ij}}$ with $\Delta = (\Delta x\,\Delta y\,
+\Delta\sigma D)^{1/3}$; its default constants give $C_s = 0.168$.

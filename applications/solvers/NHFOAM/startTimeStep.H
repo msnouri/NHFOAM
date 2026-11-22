@@ -80,8 +80,8 @@
         );
     }
 
-    // Breaking columns (hydrostatic front approximation)
-    if (hfa)
+    // Breaking columns, breaking age and eddy viscosity
+    if (breakingOn)
     {
         #include "updateBreaking.H"
     }

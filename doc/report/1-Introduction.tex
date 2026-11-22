@@ -31,11 +31,13 @@ The present version has
   \item wave generation and absorption in relaxation zones;
   \item prescribed seabed motion (bottom uplift, rigid landslides);
   \item depth-induced breaking with the hydrostatic front approximation
-        \citep{smit2013};
+        \citep{smit2013} and a breaking eddy viscosity with a breaking age
+        \citep{kennedy2000};
   \item wetting and drying with a thin film on dry columns, after NHWAVE,
         with a conservative positivity limiter and upwind face depths;
-  \item linear or stream-function \citep{fenton1988} target waves and
-        quadratic bottom friction.
+  \item linear or stream-function \citep{fenton1988} target waves,
+        quadratic (constant, Manning or log-law) bottom friction, periodic
+        lateral boundaries and time-averaged output.
 \end{itemize}
 
 This report documents the model and collects its verification and validation.
@@ -51,5 +53,8 @@ each one to find and fix weaknesses of \NHFOAM, and states what the fixes
 changed. Section~\ref{sec:wd} describes the wetting and drying, compares it
 with NHWAVE's and tests it, from still water on a beach to the run-up of a
 breaking solitary wave and spilling breakers in a surf zone.
-Section~\ref{sec:conclusions} lists the limitations and the plans.
+Section~\ref{sec:brk} adds the breaking age and eddy viscosity, tests them on
+two spilling-breaker beaches with the undertow, and runs the last test of
+\citet{ma2012}, the longshore current on a plane beach, in 3D with both
+models. Section~\ref{sec:conclusions} lists the limitations and the plans.
 Appendix~\ref{app:usage} explains how to build the code and set up a case.

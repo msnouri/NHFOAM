@@ -18,6 +18,7 @@ License
 #include "sigmaColumns.H"
 #include "syncTools.H"
 #include "DynamicList.H"
+#include "cyclicPolyPatch.H"
 
 // * * * * * * * * * * * * * * * Local Functions * * * * * * * * * * * * * * //
 
@@ -393,6 +394,32 @@ Foam::sigmaColumns::sigmaColumns(const fvMesh& mesh, const dictionary& dict)
         forAll(ff, coli)
         {
             columnNeighbours_[coli] = ff[coli];
+        }
+
+        // ... and across cyclic (periodic) patches
+        forAll(mesh_.boundaryMesh(), patchi)
+        {
+            const polyPatch& pp = mesh_.boundaryMesh()[patchi];
+
+            if (!isA<cyclicPolyPatch>(pp))
+            {
+                continue;
+            }
+
+            const cyclicPolyPatch& cpp = refCast<const cyclicPolyPatch>(pp);
+            const labelUList& fc = cpp.faceCells();
+            const labelUList& nfc = cpp.neighbPatch().faceCells();
+
+            forAll(fc, i)
+            {
+                const label c1 = cellColumn_[fc[i]];
+                const label c2 = cellColumn_[nfc[i]];
+
+                if (c1 != c2 && !columnNeighbours_[c1].found(c2))
+                {
+                    columnNeighbours_[c1].append(c2);
+                }
+            }
         }
     }
 

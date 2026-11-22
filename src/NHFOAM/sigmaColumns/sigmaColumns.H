@@ -95,8 +95,8 @@ class sigmaColumns
         //- Internal faces between the layers of each column (top first)
         labelListList columnLayerFaces_;
 
-        //- Neighbouring columns of each column (sharing a surface edge,
-        //  local to this processor)
+        //- Neighbouring columns of each column (sharing a surface edge or
+        //  a cyclic patch face; local to this processor)
         labelListList columnNeighbours_;
 
         //- Mesh points of each vertical line (one line per surface-patch

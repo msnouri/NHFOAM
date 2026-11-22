@@ -611,8 +611,6 @@ void Foam::wettingDrying::faceFactors
         gradV.correctBoundaryConditions();
 
         const List<scalarField> nbZb(patchNeighbourColumnValues(zb));
-        List<scalarField> nbCx(patchNeighbourColumnValues(colC.component(0)));
-        List<scalarField> nbCy(patchNeighbourColumnValues(colC.component(1)));
 
         forAll(mesh_.boundary(), patchi)
         {
@@ -631,6 +629,10 @@ void Foam::wettingDrying::faceFactors
                 gradV.boundaryField()[patchi].patchNeighbourField()
             );
 
+            // Owner-to-neighbour cell-centre vector, transformed across
+            // cyclic patches
+            const vectorField delta(fvp.delta());
+
             forAll(fc, i)
             {
                 if (!patchFaceOpen_[patchi][i])
@@ -647,7 +649,7 @@ void Foam::wettingDrying::faceFactors
                     faces[start + i], phip[i], co,
                     etaCol[co], zb[co], gradEta[o], colC[co],
                     nbEta[patchi][i], nbZb[patchi][i], gradNb[i],
-                    vector(nbCx[patchi][i], nbCy[patchi][i], 0)
+                    colC[co] + delta[i]
                 );
             }
         }

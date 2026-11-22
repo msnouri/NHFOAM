@@ -7,7 +7,8 @@ pressure is stored on the layer interfaces, with one surface unknown per
 column that carries the free surface implicitly; the resulting matrix is
 solved with conjugate gradients and a column (line) preconditioner. The model
 has relaxation zones for wave generation and absorption, prescribed seabed
-motion and depth-induced breaking with the hydrostatic front approximation.
+motion, and depth-induced breaking with the hydrostatic front approximation
+and a breaking eddy viscosity.
 This report documents the equations and the numerical method, and collects
 the verification and validation to date. Run on the same set-ups as NHWAVE,
 \NHFOAM\ resolves dispersion to $kh = 7$ with two layers (period error below
@@ -34,12 +35,22 @@ the parabolic basin of \citet{thacker1981} is reproduced to 0.9 mm rms, and
 the breaking solitary wave of \citet{synolakis1987} runs up to $R/d = 0.531$,
 against 0.512 for NHWAVE and 0.49--0.55 in the experiments. On the spilling
 breakers of \citet{ting1994}, with stream-function wave generation, shoaling
-and the breaking point agree with the measurements, but in the surf zone both
-\NHFOAM\ and NHWAVE lose too little energy. This dissipation of the bores is
-now the main limitation.
+and the breaking point agree with the measurements, but in the surf zone the
+hydrostatic front approximation alone, like NHWAVE, loses too little energy.
+A persistence threshold that falls with the age of the breaking event and
+the breaking eddy viscosity of \citet{kennedy2000} nearly halve the surf-zone
+errors on this beach and on that of \citet{hansen1979} (mean error of the
+wave height $+6.1 \to +3.5$ cm, NHWAVE $+4.8$ cm) and keep the measured shape
+of the undertow. With them, the longshore current of \citet{visser1991}, the
+last test of \citet{ma2012}, was run in 3D with periodic lateral boundaries,
+with both models on the same coarse grid. Both put the current at about the
+measured position and give two thirds of its strength (\NHFOAM\ 0.27 m/s,
+NHWAVE 0.25 m/s, measured 0.39 m/s); with the hydrostatic front alone the
+current is weaker and too close to the shoreline. The slow decay of the wave
+height just after breaking is now the main limitation.
 
 \vspace{0.5em}
 \noindent\textbf{Keywords:} non-hydrostatic model; $\sigma$-coordinate;
 OpenFOAM; NHWAVE; wave dispersion; wetting and drying; wave run-up;
-model validation
+wave breaking; longshore current; model validation
 \end{abstract}

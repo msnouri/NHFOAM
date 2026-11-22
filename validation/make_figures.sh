@@ -15,6 +15,9 @@
 #          Lab_runup.txt
 #   TK94 : the measurements of Ting & Kirby (1994), Fig. 4, digitised
 #          (x_TK, mean level, crest - mean, trough - mean; not distributed)
+#   BRK  : breaking and longshore-current runs (Ting & Kirby: wetdry.py,
+#          Hansen & Svendsen: the breakingSlope set-up, Visser case 4:
+#          longshore.py; NHWAVE run of Visser case 4 in $BRK/nw_visser)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -26,6 +29,7 @@ NHW=${NHW:-/home/claude/ext/nhw_forks/NHWAVE_NHWAVE}
 WD=${WD:-/home/claude/runs_wd}
 BP4=${BP4:-/home/claude/ext/nthmp/nthmp-benchmark-problems/BP04-JosephZ-Single_wave_on_simple_beach}
 TK94=${TK94:-/home/claude/ext/tk94/dfdm/examples/tingkirby94_spillingwaves/exp/tk94_fig4_spilling.dat}
+BRK=${BRK:-/home/claude/runs_brk}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -105,3 +109,21 @@ cp /tmp/wd_runup_all_shoreline.png $OUT/wd_runup_shoreline.png
 cp /tmp/wd_runup_all_shoreline.pdf $OUT/wd_runup_shoreline.pdf
 python3 plot_tingkirby.py $TK94 $OUT/tk_spilling.png $WD/tk/tk_nf:NHFOAM \
     $WD/tk/tk_b01:"NHFOAM, \$\\beta = 0.1\$" nhwave:$WD/tk/nw_tk:NHWAVE
+
+# Breaking with a breaking age and eddy viscosity; longshore current
+TK5=${TK94%/*}/tk94_fig5_undertow_spilling.dat
+python3 plot_tingkirby.py $TK94 $OUT/tk_breaking.png \
+    $BRK/tk_hfa3:"NHFOAM, HFA" $BRK/tk_hybh3:"NHFOAM, HFA + eddy viscosity" \
+    $BRK/tk_hyb3:"NHFOAM, HFA + eddy viscosity, vertical mixing" \
+    nhwave:$WD/tk/nw_tk:NHWAVE
+python3 plot_undertow.py $TK5 $OUT/tk_undertow.png \
+    $BRK/tk_hfa3:"NHFOAM, HFA" $BRK/tk_hybh3:"NHFOAM, HFA + eddy viscosity" \
+    $BRK/tk_hyb3:"NHFOAM, HFA + eddy viscosity, vertical mixing" \
+    nhwave:$WD/tk/nw_tk:NHWAVE
+python3 plot_hansen_svendsen.py $LAB/car_hansen_svendsen/postprocessing/ht_setup_061071.txt 1.667 \
+    $OUT/hs_breaking.png \
+    $RUNS_IF/ihs061_or:"NHFOAM, HFA" $BRK/hs_hyb3:"NHFOAM, HFA + eddy viscosity"
+python3 plot_longshore.py $OUT/longshore.png --snapshot $BRK/ls_hybh \
+    $BRK/ls_hybh:"NHFOAM, HFA + eddy viscosity" \
+    $BRK/ls_hyb:"NHFOAM, ... with vertical mixing" $BRK/ls_hfa:"NHFOAM, HFA" \
+    nhwave:$BRK/nw_visser:NHWAVE
