@@ -33,6 +33,30 @@
         avgTime += dt;
     }
 
+    // Restart state (createFields.H)
+    if (runTime.writeTime())
+    {
+        columns.setCellValues(etaN, etaOld.primitiveFieldRef());
+        etaOld.correctBoundaryConditions();
+
+        if (breakingOn)
+        {
+            columns.setCellValues(colAge, breakingAge.primitiveFieldRef());
+            breakingAge.correctBoundaryConditions();
+        }
+
+        if (interfaceP)
+        {
+            columns.setCellValues(psCol, pSurf.primitiveFieldRef());
+            pSurf.correctBoundaryConditions();
+        }
+
+        nhState.set("nEtaLevels", nEtaLevels);
+        nhState.set("avgTime", avgTime);
+        nhState.instance() = runTime.timeName();
+        nhState.regIOobject::write();
+    }
+
     // Wetting and drying: limiter and shoreline record
     if (wetDry.active())
     {

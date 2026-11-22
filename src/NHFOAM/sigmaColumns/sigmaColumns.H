@@ -283,6 +283,13 @@ public:
             //- Set the bottom elevation of each line (used by newPoints)
             void setLineBottomZ(const scalarField& zb);
 
+            //- Set the reference bottom of the lines (the bottom of the
+            //  initial mesh; used on restarts with bottom motion)
+            void setLineBottomZ0(const scalarField& zb0)
+            {
+                lineBottomZ0_ = zb0;
+            }
+
             //- Update the column geometry after the mesh has moved
             void updateGeometry();
 

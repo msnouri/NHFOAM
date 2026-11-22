@@ -324,6 +324,16 @@ with `averaging` the time averages `UMean` and `etaMean` (averaged at fixed
 σ; with uniform layers the layer average of `UMean` in a column is the mean
 depth-averaged velocity).
 
+**Restarts.** With the fields NHFOAM writes its state: the time levels of η
+(`etaOld`, `uniform/NHFOAMState`), the face velocities of the last two
+levels (`Uf`, `UfN`), the surface pressure unknowns (`pSurf`), the breaking
+flags and ages (`breakingAge`) and the averaging time. A run restarted from
+a written time keeps the mesh it was written with and continues as if it had
+not stopped (Ting & Kirby with breaking and wetting and drying, restarted
+after 6 s: η within 6·10⁻¹⁴ m of the continuous run after another 6 s;
+bottom uplift within 10⁻¹⁸ m). Without the state (older output) it starts
+afresh: Euler first step, mesh placed on η.
+
 **`constant/NHFOAMProperties`:**
 
 ```c++
@@ -1189,9 +1199,6 @@ the likely main cause of the deficit both models share here.
   give two thirds of the measured current, at about the right place.
 - **Wave generation** is by relaxation zones with linear or stream-function
   targets. There is no boundary wavemaker and no irregular input.
-- **Restarts** do not save the BDF2 history of η or Uf. The first step after
-  a restart is Euler without flux extrapolation, and the flux is rebuilt
-  from U.
 - **Long waves in closed flumes.** The relaxation zones absorb long waves
   only partly, and the wave-making zone does not conserve volume (no return
   current for the Stokes drift). Long waves of a few millimetres therefore

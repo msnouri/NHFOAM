@@ -73,6 +73,51 @@ label nEtaLevels = 0;
 columns.setCellValues(etaCol, eta.primitiveFieldRef());
 eta.correctBoundaryConditions();
 
+// Restart state, written with the fields (endTimeStep.H): the number of
+// time levels of eta and the averaging time in uniform/NHFOAMState, eta of
+// the previous level (etaOld), the face velocities of the last two levels
+// (Uf, UfN), the surface pressure unknowns (pSurf), and the breaking flags
+// and ages.  With it a restart continues as if the run had not stopped
+// (bitwise with binary output); without it the run starts afresh: Euler
+// first step, mesh placed on eta.
+IOdictionary nhState
+(
+    IOobject
+    (
+        "NHFOAMState",
+        runTime.timeName(),
+        "uniform",
+        runTime,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE,
+        false
+    )
+);
+const bool restartState(nhState.found("nEtaLevels"));
+
+volScalarField etaOld
+(
+    IOobject
+    (
+        "etaOld",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::AUTO_WRITE
+    ),
+    eta
+);
+
+if (restartState)
+{
+    nEtaLevels = nhState.get<label>("nEtaLevels");
+    etaN = columns.columnValues(etaOld.primitiveField());
+
+    Info<< "Restart with the saved state: " << nEtaLevels
+        << " time levels, eta of the previous level and the face"
+        << " velocities read; the mesh is kept\n" << endl;
+}
+
 
 // Move the mesh with the free surface (false: fixed mesh, for linear
 // small-amplitude studies only)
@@ -90,6 +135,17 @@ if (bedMotion.active())
             << exit(FatalError);
     }
 
+    // On a restart the mesh holds the displaced bottom: recover the
+    // reference bottom of the displacement
+    if (restartState)
+    {
+        columns.setLineBottomZ0
+        (
+            columns.lineBottomZ0()
+          - bedMotion.displacement(columns.lineCentre(), runTime.value())
+        );
+    }
+
     columns.setLineBottomZ
     (
         columns.lineBottomZ0()
@@ -97,8 +153,9 @@ if (bedMotion.active())
     );
 }
 
-// Place the mesh on the initial free surface (and bottom)
-if (moveMesh)
+// Place the mesh on the initial free surface (and bottom); a restart keeps
+// the mesh it was written with
+if (moveMesh && !restartState)
 {
     tmp<pointField> tnewPoints(columns.newPoints(etaCol, minDepth));
 
@@ -219,17 +276,28 @@ surfaceVectorField Uf
         "Uf",
         runTime.timeName(),
         mesh,
-        IOobject::NO_READ,
-        IOobject::NO_WRITE
+        IOobject::READ_IF_PRESENT,
+        IOobject::AUTO_WRITE
     ),
-    fvc::interpolate(U)
+    fvc::interpolate(U)()
 );
 
 // Face velocities of the last two time levels, n and n-1: the convecting
 // flux of the first outer corrector is extrapolated from them
 // (fluxExtrapolation)
-surfaceVectorField UfN("UfN", Uf);
-surfaceVectorField UfNm1("UfNm1", Uf);
+surfaceVectorField UfN
+(
+    IOobject
+    (
+        "UfN",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::AUTO_WRITE
+    ),
+    Uf
+);
+surfaceVectorField UfNm1("UfNm1", UfN);
 
 
 singlePhaseTransportModel laminarTransport(U, phi);
@@ -447,6 +515,62 @@ volScalarField breaking
     zeroGradientFvPatchScalarField::typeName
 );
 
+volScalarField breakingAge
+(
+    IOobject
+    (
+        "breakingAge",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        breakingOn ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar("zero", dimTime, 0),
+    zeroGradientFvPatchScalarField::typeName
+);
+
+if (breakingOn && restartState)
+{
+    IOobject bHeader
+    (
+        "breaking",
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE,
+        false
+    );
+    IOobject aHeader
+    (
+        "breakingAge",
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE,
+        false
+    );
+
+    if
+    (
+        bHeader.typeHeaderOk<volScalarField>(true)
+     && aHeader.typeHeaderOk<volScalarField>(true)
+    )
+    {
+        const volScalarField b(bHeader, mesh);
+        const volScalarField a(aHeader, mesh);
+        const scalarField bCol(columns.columnValues(b.primitiveField()));
+
+        colAge = columns.columnValues(a.primitiveField());
+        forAll(colBreaking, coli)
+        {
+            colBreaking[coli] = (bCol[coli] > 0.5);
+        }
+        breaking.primitiveFieldRef() = b.primitiveField();
+        breaking.correctBoundaryConditions();
+    }
+}
+
 // Breaking ages exchanged across processor boundaries (updateBreaking.H)
 volScalarField brkExchange
 (
@@ -550,6 +674,27 @@ autoPtr<volScalarField> pIPtr;        // p_rgh on the bottom interface of
                                       // each cell
 autoPtr<volVectorField> gradPPtr;     // cell gradient of p_rgh
 scalarField psCol(gMag*etaCol);       // surface pressure g eta per column
+
+// Surface pressure unknowns, written for restarts
+volScalarField pSurf
+(
+    IOobject
+    (
+        "pSurf",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        interfaceP ? IOobject::AUTO_WRITE : IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(p_rgh.dimensions(), Zero),
+    zeroGradientFvPatchScalarField::typeName
+);
+
+if (interfaceP && restartState && pSurf.headerOk())
+{
+    psCol = columns.columnValues(pSurf.primitiveField());
+}
 
 if (interfaceP)
 {
@@ -718,7 +863,7 @@ const scalar avgStart
 (
     avgDictPtr ? avgDictPtr->get<scalar>("timeStart") : GREAT
 );
-scalar avgTime = 0;
+scalar avgTime = nhState.getOrDefault<scalar>("avgTime", 0);
 
 autoPtr<volVectorField> UMeanPtr;
 autoPtr<volScalarField> etaMeanPtr;
@@ -734,7 +879,7 @@ if (avgDictPtr)
                 "UMean",
                 runTime.timeName(),
                 mesh,
-                IOobject::NO_READ,
+                IOobject::READ_IF_PRESENT,
                 IOobject::AUTO_WRITE
             ),
             mesh,
@@ -750,7 +895,7 @@ if (avgDictPtr)
                 "etaMean",
                 runTime.timeName(),
                 mesh,
-                IOobject::NO_READ,
+                IOobject::READ_IF_PRESENT,
                 IOobject::AUTO_WRITE
             ),
             mesh,
