@@ -115,45 +115,114 @@
         // into deep water.  A breaking or joining column takes over the age
         // of an older breaking neighbour, so the age is that of the breaking
         // event and travels with the wave.
-        bool changed = true;
-        label sweep = 0;
-
-        while (changed && sweep++ < nCol)
+        // Join (or take the age of) a breaking neighbour of age aNb
+        auto join = [&](const label coli, const scalar aNb)
         {
-            changed = false;
-
-            forAll(colBreaking, coli)
+            if (aNb < 0 || (wet.size() && !wet[coli]))
             {
-                if (wet.size() && !wet[coli])
+                return false;
+            }
+
+            const scalar a = (colBreaking[coli] ? colAge[coli] : scalar(-1));
+
+            if
+            (
+                aNb > a
+             && (colBreaking[coli] || etaT[coli] > threshold(coli, 0))
+            )
+            {
+                colBreaking[coli] = true;
+                colAge[coli] = aNb;
+                return true;
+            }
+
+            return false;
+        };
+
+        // Sweeps over the local columns until nothing changes
+        auto spreadLocally = [&]()
+        {
+            bool changed = true;
+            label sweep = 0;
+
+            while (changed && sweep++ < nCol)
+            {
+                changed = false;
+
+                forAll(colBreaking, coli)
                 {
-                    continue;
-                }
+                    const labelList& nb = nbrs[coli];
 
-                const labelList& nb = nbrs[coli];
-                scalar a = (colBreaking[coli] ? colAge[coli] : scalar(-1));
-                bool join = false;
-
-                forAll(nb, i)
-                {
-                    const label cn = nb[i];
-
-                    if
-                    (
-                        colBreaking[cn]
-                     && colAge[cn] > a
-                     && (colBreaking[coli] || etaT[coli] > threshold(coli, 0))
-                    )
+                    forAll(nb, i)
                     {
-                        a = colAge[cn];
-                        join = true;
+                        const label cn = nb[i];
+
+                        if (colBreaking[cn] && join(coli, colAge[cn]))
+                        {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        };
+
+        spreadLocally();
+
+        // Across processor boundaries: exchange the age of the breaking
+        // columns (-1: not breaking) through the coupled patches, join, and
+        // repeat the local sweeps until nothing changes anywhere
+        if (Pstream::parRun())
+        {
+            const labelList& cellCol = columns.cellColumn();
+
+            for (label iter = 0; iter < 1000; ++iter)
+            {
+                scalarField colA(nCol, -1);
+                forAll(colBreaking, coli)
+                {
+                    if (colBreaking[coli])
+                    {
+                        colA[coli] = colAge[coli];
+                    }
+                }
+                columns.setCellValues(colA, brkExchange.primitiveFieldRef());
+                brkExchange.correctBoundaryConditions();
+
+                bool changed = false;
+
+                forAll(mesh.boundary(), patchi)
+                {
+                    const fvPatch& fvp = mesh.boundary()[patchi];
+
+                    if (!fvp.coupled())
+                    {
+                        continue;
+                    }
+
+                    const scalarField nbA
+                    (
+                        brkExchange.boundaryField()[patchi]
+                       .patchNeighbourField()
+                    );
+                    const labelUList& fc = fvp.faceCells();
+
+                    forAll(fc, i)
+                    {
+                        if (join(cellCol[fc[i]], nbA[i]))
+                        {
+                            changed = true;
+                        }
                     }
                 }
 
-                if (join)
+                if (changed)
                 {
-                    colBreaking[coli] = true;
-                    colAge[coli] = a;
-                    changed = true;
+                    spreadLocally();
+                }
+
+                if (!returnReduce(changed, orOp<bool>()))
+                {
+                    break;
                 }
             }
         }

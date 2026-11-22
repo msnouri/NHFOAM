@@ -447,6 +447,23 @@ volScalarField breaking
     zeroGradientFvPatchScalarField::typeName
 );
 
+// Breaking ages exchanged across processor boundaries (updateBreaking.H)
+volScalarField brkExchange
+(
+    IOobject
+    (
+        "brkExchange",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE,
+        false
+    ),
+    mesh,
+    dimensionedScalar("minusOne", dimless, -1),
+    zeroGradientFvPatchScalarField::typeName
+);
+
 // Breaking eddy viscosity in the cells, and the face weights of its
 // diffusion: 1 on the side faces (including coupled patches), 1 or 0 on the
 // layer faces, 0 on the other boundaries

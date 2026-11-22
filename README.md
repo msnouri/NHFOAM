@@ -177,7 +177,7 @@ a neighbouring column joins it, while ∂η/∂t > η_t*. Without `betaFinal`,
 the eddy-viscosity model of Kennedy et al. (2000); a column that joins next
 to an older breaker takes over its age, so the age travels with the wave and
 the breaking region grows over the face of a mature bore. Neighbours include
-columns across cyclic patches, but not across processor boundaries. Two
+columns across cyclic patches and processor boundaries. Two
 treatments act in the breaking columns (`model HFA`, `eddyViscosity` or
 `hybrid` for both):
 
@@ -1183,7 +1183,7 @@ the likely main cause of the deficit both models share here.
   beach), and the breaking point is 0.2–0.6 m from the measured one. The
   parameters are those of Smit et al. (2013) and Kennedy et al. (2000), not
   tuned. The kinematic onset needs a better crest-speed estimate than
-  √(gD). Breaking columns spread only to neighbours on the same processor.
+  √(gD).
 - **Longshore current** (test 4.7) has been run on a grid three to four
   times coarser alongshore than Ma et al.'s. There both NHFOAM and NHWAVE
   give two thirds of the measured current, at about the right place.

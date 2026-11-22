@@ -183,7 +183,10 @@ front, which drives spurious vertical fluxes.
 The breaking flags, ages and eddy viscosities are set at the start of each
 time step from $\partial\eta/\partial t = (\eta^n-\eta^{n-1})/\Delta t_0$.
 The flags spread over the neighbouring columns in repeated sweeps until
-nothing changes; on a processor they reach only the local columns. The
+nothing changes. In parallel runs the ages of the breaking columns are then
+exchanged through the processor patches, and the sweeps and exchanges are
+repeated until nothing changes on any processor, so a breaker cut by a
+processor boundary is flagged as in a serial run (Section~\ref{sec:brk-par}). The
 eddy viscosity of a face is the linear interpolate of the column values
 (zero on walls, the free surface and the bottom, and on the closed faces of
 dry columns), and the diffusion term is implicit in $\bm{u}$
