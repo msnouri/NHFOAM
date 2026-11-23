@@ -1,0 +1,12 @@
+#!/bin/sh
+cd "${0%/*}" || exit 1
+. ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
+
+# JONSWAP waves (Hs = 3 cm, Tp = 1.5 s, gamma = 3.3, 100 components) from the
+# boundary wavemaker nhWaveVelocity on the left, with active absorption; the
+# right end is an absorbing boundary (the same condition with zero wave
+# height).  No relaxation zones.  Gauges: postProcessing/gauges/0/eta.dat
+restore0Dir
+
+runApplication blockMesh
+runApplication NHFOAM

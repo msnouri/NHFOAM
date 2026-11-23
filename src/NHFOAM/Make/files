@@ -3,6 +3,7 @@ regularWave/regularWave.C
 forcingZones/forcingZones.C
 bottomMotion/bottomMotion.C
 derivedFvPatchFields/nhMovingSlipVelocity/nhMovingSlipVelocityFvPatchVectorField.C
+derivedFvPatchFields/nhWaveVelocity/nhWaveVelocityFvPatchVectorField.C
 interfacePressure/interfacePressure.C
 wettingDrying/wettingDrying.C
 interfacePressure/sigmaColumnPreconditioner.C

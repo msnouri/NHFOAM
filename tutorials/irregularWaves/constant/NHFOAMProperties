@@ -1,0 +1,40 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFOAM
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      NHFOAMProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Free-surface (top) and bottom patches of the sigma mesh
+surfacePatch    surface;
+bottomPatch     bottom;
+
+// Smallest water depth used to place the mesh points [m]
+minDepth        1e-4;
+
+stillWaterLevel 0;
+
+pressureLocation interface;
+
+gauges
+{
+    G000    (1 0.01 0);
+    G001    (3 0.01 0);
+    G002    (5 0.01 0);
+    G003    (7 0.01 0);
+    G004    (9 0.01 0);
+    G005    (11 0.01 0);
+    G006    (13 0.01 0);
+}
+
+// ************************************************************************* //

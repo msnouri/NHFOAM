@@ -179,6 +179,84 @@ boundaryField
 """)
 
 
+def rans_files(case, model="kOmegaLF", k0=1e-7, omega0=1.0, coeffs="",
+               walls=("left", "right"), empty=True, noslip_bottom=True,
+               conv_turb="Gauss limitedLinear 1"):
+    """RAS turbulence (default: the stabilised k-omega model kOmegaLF of
+    libNHFOAMturbulenceModels).  The bottom gets wall functions and, with
+    noslip_bottom, a no-slip velocity (then switch the quadratic bottom
+    friction off): the wall function supplies the bed shear stress."""
+    write(case, "constant/turbulenceProperties", "dictionary", f"""
+simulationType  RAS;
+
+RAS
+{{
+    RASModel        {model};
+    turbulence      on;
+    printCoeffs     on;
+{coeffs}
+}}
+""")
+    fbE = ("    frontAndBack\n    {\n        type            empty;\n    }\n"
+           if empty else "")
+
+    def field(name, dims, value, bottom, surface, wall):
+        wl = "".join(f"    {w}\n    {{\n        {wall}\n    }}\n" for w in walls)
+        write(case, f"0/{name}", "volScalarField", f"""
+dimensions      {dims};
+
+internalField   uniform {value:g};
+
+boundaryField
+{{
+    surface
+    {{
+        {surface}
+    }}
+    bottom
+    {{
+        {bottom}
+    }}
+{wl}{fbE}}}
+""")
+
+    field("k", "[0 2 -2 0 0 0 0]", k0,
+          f"type kqRWallFunction; value uniform {k0:g};",
+          "type zeroGradient;", "type zeroGradient;")
+    field("omega", "[0 0 -1 0 0 0 0]", omega0,
+          f"type omegaWallFunction; value uniform {omega0:g};",
+          "type zeroGradient;", "type zeroGradient;")
+    field("nut", "[0 2 -1 0 0 0 0]", 0.0,
+          "type nutkWallFunction; value uniform 0;",
+          "type calculated; value uniform 0;",
+          "type calculated; value uniform 0;")
+    if noslip_bottom:
+        u = open(os.path.join(case, "0/U")).read()
+        i = u.index("    bottom")
+        j = u.index("}", i)
+        u = (u[:i] + "    bottom\n    {\n        type            noSlip;\n    "
+             + u[j:])
+        open(os.path.join(case, "0/U"), "w").write(u)
+    sch = open(os.path.join(case, "system/fvSchemes")).read()
+    sch = sch.replace(
+        "    div((nuEff*dev2(T(grad(U))))) Gauss linear;",
+        "    div((nuEff*dev2(T(grad(U))))) Gauss linear;\n"
+        f"    div(phi,k)      {conv_turb};\n"
+        f"    div(phi,omega)  {conv_turb};", 1)
+    sch = sch.rstrip()
+    k = sch.rfind("\n//")
+    sch = (sch[:k] + "\n\nwallDist\n{\n    method          meshWave;\n}\n"
+           + sch[k:] + "\n")
+    open(os.path.join(case, "system/fvSchemes"), "w").write(sch)
+    sol = open(os.path.join(case, "system/fvSolution")).read()
+    sol = sol.replace(
+        '    "(U|UFinal)"',
+        '    "(k|omega)(Final)?"\n    {\n        solver          smoothSolver;\n'
+        '        smoother        symGaussSeidel;\n        tolerance       1e-12;\n'
+        '        relTol          0;\n    }\n\n    "(U|UFinal)"', 1)
+    open(os.path.join(case, "system/fvSolution"), "w").write(sol)
+
+
 # Convection of momentum: a TVD scheme. linearUpwind loses ~12% of H = 4 cm
 # over 8 wavelengths, limitedLinearV ~3%; central differencing (Gauss linear)
 # loses least but lets grid-scale noise grow in long nonlinear runs (the
@@ -195,7 +273,7 @@ PSOLVER = {
 }
 
 def system_files(case, endTime, deltaT, writeInterval, ddt="backward 1", nCorr=3, nNonOrth=0, pTol=1e-12, extraSolver="", libs=False, conv=None):
-    libsLine = 'libs            ("libNHFOAM.so");   // nhMovingSlipVelocity for utilities\n\n' if libs else ""
+    libsLine = 'libs            ("libNHFOAM.so");   // NHFOAM boundary conditions for utilities\n\n' if libs else ""
     write(case, "system/controlDict", "dictionary", f"""
 {libsLine}application     NHFOAM;
 
@@ -518,35 +596,73 @@ if __name__ == "__main__":
     print(standing_case(case, kh, nl))
 
 
+def wave_bc(patch, wave, absorb=True, celerity=None):
+    """U entry of a boundary wavemaker (nhWaveVelocity) with the given entries
+    of the target wave (see regularWave.H)."""
+    cel = f"        absorptionCelerity {celerity};\n" if celerity else ""
+    body = "\n".join("            " + l.strip() for l in wave.strip().splitlines() if l.strip())
+    return f"""    {patch}
+    {{
+        type            nhWaveVelocity;
+        activeAbsorption {"yes" if absorb else "no"};
+{cel}        wave
+        {{
+{body}
+        }}
+        value           uniform (0 0 0);
+    }}
+"""
+
+
+def set_patch(case, field, patch, text, old_type="slip"):
+    """Replace the entry of a patch (of type old_type) in 0/<field>."""
+    p = os.path.join(case, "0", field)
+    s = open(p).read()
+    old = f"    {patch}\n    {{\n        type            {old_type};\n    }}\n"
+    assert old in s, (case, field, patch)
+    open(p, "w").write(s.replace(old, text))
+
+
 def bar_case(case, nLayers=10, dx=0.02, dt=0.005, endTime=50.0, H=0.02, T=2.02,
              waves=True, sigmaMax=20.0, writeEvery=None, breaking=None, conv=None,
-             zgrade=1.0):
+             zgrade=1.0, wavemaker="zone", returnCurrent=False, gauges=None):
     """Luth et al. (1994) / Beji & Battjes (1993) submerged bar, case A
-    (flume coordinates of the FUNWAVE benchmark: bar from x = 26 to 37 m)."""
+    (flume coordinates of the FUNWAVE benchmark: bar from x = 26 to 37 m).
+    wavemaker: "zone" (relaxation zone in 0..8 m, as in the report's runs,
+    made before the return current existed) or "bc" (nhWaveVelocity at
+    x = 0 with active absorption).  gauges: x positions (default: the
+    measuring stations)."""
     xs = [0, 26, 32, 34, 37, 54]
     hs = [0.4, 0.4, 0.1, 0.1, 0.4, 0.4]
     dy = 0.02
-    gauges = [22, 24, 30.5, 32.5, 33.5, 34.5, 35.7, 37.3, 39.0, 41.0]
+    if gauges is None:
+        gauges = [22, 24, 30.5, 32.5, 33.5, 34.5, 35.7, 37.3, 39.0, 41.0]
     gtxt = "\n".join(f"    G{g:g}    ({g:g} {dy/2:g} 0);" for g in gauges)
+    rc = "yes" if returnCurrent else "no"
+    wave = f"""waveHeight  {H:g};
+        wavePeriod  {T:g};
+        depth       0.4;
+        direction   (1 0 0);
+        rampTime    {2*T:g};
+        returnCurrent {rc};"""
     zones = ""
     if waves:
-        zones = f"""
-forcingZones
-{{
-    inlet
+        inlet = ""
+        if wavemaker == "zone":
+            inlet = f"""    inlet
     {{
         type        wave;
         start       (8 0 0);
         end         (0 0 0);
         sigmaMax    {sigmaMax:g};
         exponent    2;
-        waveHeight  {H:g};
-        wavePeriod  {T:g};
-        depth       0.4;
-        direction   (1 0 0);
-        rampTime    {2*T:g};
+        {wave}
     }}
-    outlet
+"""
+        zones = f"""
+forcingZones
+{{
+{inlet}    outlet
     {{
         type        sponge;
         start       (46 0 0);
@@ -578,6 +694,8 @@ gauges
                  conv=conv or (CONV_BREAKING if breaking else CONV))
     blockmesh_profile(case, xs, hs, dy, dx, nLayers, zgrade=zgrade)
     common_fields(case)
+    if waves and wavemaker == "bc":
+        set_patch(case, "U", "left", wave_bc("left", wave))
     allrun(case, """
     runApplication blockMesh
     runApplication NHFOAM
@@ -689,7 +807,7 @@ gauges
 {{
 {gtxt}
 }}
-
+{wd}
 bottomMotion
 {{
     type        slide;
@@ -783,12 +901,15 @@ forcingZones
 
 def enet_grilli_case(case, d=61, dx=0.025, nLayers=5, dt=0.005, endTime=4.0,
                      xWall=0.2, L=10.0, Ly=1.8, ygrade=1.0, sponge=3.0, conv=None,
-                     zgrade=1.0):
+                     zgrade=1.0, film=0.005):
     """NTHMP landslide benchmark 2: 3D rigid slide of Enet & Grilli (2007) on
     a 15 deg slope, half tank with a symmetry wall on the axis (y = 0).
     x is measured from the still-water shoreline; the domain starts at
-    x = xWall (no wetting and drying) and the slope meets the 1.5 m deep
-    tank bottom at x = 5.6 m."""
+    x = xWall and the slope meets the 1.5 m deep tank bottom at x = 5.6 m.
+    xWall > 0: a wall in the water (no wetting and drying, the runs of the
+    report's sections 4 and 5); xWall < 0: the beach up to the bed height
+    -xWall tan(15 deg) above the still water, with wetting and drying
+    (minDepth film)."""
     # Initial position of the slide centre and fitted law of motion
     # (Enet & Grilli 2007; values as in the NHWAVE benchmark input)
     slides = {61: dict(x0=0.551, ut=1.70, a0=1.12)}
@@ -797,6 +918,16 @@ def enet_grilli_case(case, d=61, dx=0.025, nLayers=5, dt=0.005, endTime=4.0,
     h0 = 1.5
     xs = [xWall, h0 / tanb, L]
     hs = [xWall * tanb, h0, h0]
+    ztop = None
+    wd = ""
+    if xWall < 0:
+        xs, hs, ztop = beach_profile(xs, hs, film, dx=dx)
+        wd = f"""
+wettingDrying
+{{
+    minDepth    {film:g};
+}}
+"""
     Ny = int(round(Ly / dx))
     gauges = {"g1": (s["x0"], 0.0), "g2": (1.469, 0.35), "g3": (1.929, 0.0),
               "g4": (1.919, 0.5)}
@@ -806,7 +937,7 @@ gauges
 {{
 {gtxt}
 }}
-
+{wd}
 bottomMotion
 {{
     type        slide;
@@ -836,7 +967,8 @@ forcingZones
     nsteps = int(round(endTime / dt))
     system_files(case, endTime=endTime, deltaT=dt, writeInterval=max(1, nsteps // 8),
                  nCorr=3, nNonOrth=1, pTol=1e-10, libs=True, conv=conv)
-    blockmesh_profile(case, xs, hs, Ly, dx, nLayers, zgrade=zgrade, Ny=Ny, ygrade=ygrade)
+    blockmesh_profile(case, xs, hs, Ly, dx, nLayers, zgrade=zgrade, Ny=Ny, ygrade=ygrade,
+                      ztop=ztop)
     common_fields(case, walls=("left", "right", "axis", "side"), empty=False)
     p = os.path.join(case, "0/U")
     txt = open(p).read().replace("""    bottom
