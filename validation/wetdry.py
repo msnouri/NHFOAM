@@ -181,7 +181,7 @@ def tingkirby(case, nz=10, dx=0.025, dt=0.005, nPeriods=30, zone=3.8,
               flat=2.2, xEnd=17.0, film=0.005, Cd=0.006, breaking=True,
               conv="Gauss limitedLinearV 1", wd_extra="", N=24,
               theory="streamFunction", alpha=0.6, beta=0.3, gauge_dx=0.1,
-              brk_model="HFA", brk_extra="", les_Ck=None):
+              brk_model="HFA", brk_extra="", les_Ck=None, rans=None):
     from stream_function import fenton, foam_entries
     x0 = -(zone + flat)
     xs0 = [x0, 0.0, xEnd]
@@ -245,6 +245,8 @@ wettingDrying
     mc.common_fields(case)
     if les_Ck:
         mc.les_files(case, Ck=les_Ck)
+    if rans is not None:
+        mc.rans_files(case, **rans)
     mc.allrun(case, """
 runApplication blockMesh
 runApplication NHFOAM

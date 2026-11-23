@@ -11,6 +11,7 @@ fi
 
 set -e
 wmake libso src/NHFOAM
+wmake libso src/turbulenceModels
 wmake applications/solvers/NHFOAM
 wmake applications/utilities/nhSetWaves
 

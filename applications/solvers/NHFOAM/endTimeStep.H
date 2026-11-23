@@ -30,6 +30,16 @@
             w*(U.primitiveField() - UMeanPtr->primitiveField());
         etaMeanPtr->primitiveFieldRef() +=
             w*(eta.primitiveField() - etaMeanPtr->primitiveField());
+
+        forAll(avgScalarNames, i)
+        {
+            const volScalarField& f =
+                mesh.lookupObject<volScalarField>(avgScalarNames[i]);
+
+            avgScalarMeans[i].primitiveFieldRef() +=
+                w*(f.primitiveField() - avgScalarMeans[i].primitiveField());
+        }
+
         avgTime += dt;
     }
 

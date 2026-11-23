@@ -42,7 +42,8 @@ fig, axes = plt.subplots(3, 1, figsize=(7.5, 8.0), sharex=True,
                          gridspec_kw=dict(height_ratios=[3, 2, 1.2]))
 report = []
 styles = ["-", "--", "-.", ":", (0, (1, 1))]
-for (kind, case, label), col, ls in zip(runs, cols, styles):
+import itertools
+for (kind, case, label), col, ls in zip(runs, itertools.cycle(cols), itertools.cycle(styles)):
     if kind == "nhfoam":
         t, eta = om.read_nhfoam(case)
         xg = np.array(sorted(eta))
@@ -50,13 +51,16 @@ for (kind, case, label), col, ls in zip(runs, cols, styles):
         xg = np.loadtxt(os.path.join(case, "gauges_x.txt"))
         t, eta = om.read_any(kind, case, list(xg))
     st = np.array([wave_stats(t, eta[x], T) for x in xg])
-    axes[0].plot(xg, 100 * st[:, 0], ls, color=col, lw=1.6, label=label)
-    axes[1].plot(xg, 1000 * st[:, 1], ls, color=col, lw=1.6, label=label)
+    axes[0].plot(xg, 100 * st[:, 0], linestyle=ls, color=col, lw=1.6, label=label)
+    axes[1].plot(xg, 1000 * st[:, 1], linestyle=ls, color=col, lw=1.6, label=label)
     Hm = np.interp(lab[:, 0], xg, st[:, 0])
     Sm = np.interp(lab[:, 0], xg, st[:, 1])
+    surf = lab[:, 0] > 8.3
     report.append((label, 100 * np.sqrt(np.mean((Hm - lab[:, 1]) ** 2)),
                    100 * xg[np.nanargmax(st[:, 0])], 100 * np.nanmax(st[:, 0]),
-                   1000 * np.sqrt(np.mean((Sm - lab[:, 2]) ** 2))))
+                   1000 * np.sqrt(np.mean((Sm - lab[:, 2]) ** 2)),
+                   100 * np.sqrt(np.mean((Hm[surf] - lab[surf, 1]) ** 2)),
+                   100 * np.sqrt(np.mean((Hm[~surf] - lab[~surf, 1]) ** 2))))
 axes[0].plot(lab[:, 0], 100 * lab[:, 1], "o", ms=4, mfc="none", color="#c0392b",
              label="Hansen \\& Svendsen (1979)")
 axes[1].plot(lab[:, 0], 1000 * lab[:, 2], "o", ms=4, mfc="none", color="#c0392b")
@@ -81,4 +85,4 @@ print("label: rms(H) [cm], x of max H [cm], max H [cm]; lab max H = "
       f"{100*lab[:,1].max():.2f} cm at x = {lab[np.argmax(lab[:,1]),0]:.2f} m")
 for r in report:
     print(f"{r[0]}: rms {r[1]:.3f} cm, Hmax {r[3]:.2f} cm at x = {r[2]/100:.2f} m, "
-          f"rms(setup) {r[4]:.2f} mm")
+          f"rms(setup) {r[4]:.2f} mm; rms(H) x > 8.3 m {r[5]:.2f} cm, before {r[6]:.2f} cm")

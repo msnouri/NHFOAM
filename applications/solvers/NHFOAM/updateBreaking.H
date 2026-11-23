@@ -1,10 +1,11 @@
 // Wave breaking: the breaking columns, their breaking age and the breaking
 // eddy viscosity.
 //   onset           d(eta)/dt > alpha sqrt(g D)                 (etaT)
-//                   |u_s| > Bkin sqrt(g D)                      (kinematic)
-//                   u_s the horizontal velocity of the surface cell and
-//                   sqrt(g D) the long-wave speed at the local total depth
-//                   (an estimate of the crest speed)
+//                   u_s.n > Bkin C                              (kinematic)
+//                   u_s the horizontal velocity of the surface cell, C the
+//                   crest speed and n the direction of propagation, both
+//                   from the front faces around the column (C = d(eta)/dt
+//                   over |grad(eta)|), or C = sqrt(g D) if there are none
 //   persistence     d(eta)/dt > eta_t*, for columns that were breaking;
 //                   a column next to a breaking column joins above
 //                   beta sqrt(g D)
@@ -64,16 +65,67 @@
 
         if (kinematicOnset)
         {
-            scalarField uh(mesh.nCells());
-            forAll(uh, celli)
-            {
-                uh[celli] = Foam::sqrt(sqr(U[celli].x()) + sqr(U[celli].y()));
-            }
-            const scalarField uS(columns.columnValues(uh));
+            // Horizontal velocity of the surface cells
+            const scalarField ux(columns.columnValues(U.primitiveField().component(0)));
+            const scalarField uy(columns.columnValues(U.primitiveField().component(1)));
 
+            // Surface slope of each column
+            const volVectorField gradEta(fvc::grad(eta));
+            const scalarField gx
+            (
+                columns.columnValues(gradEta.primitiveField().component(0))
+            );
+            const scalarField gy
+            (
+                columns.columnValues(gradEta.primitiveField().component(1))
+            );
+
+            // Crest speed and direction from the wave faces around each
+            // column (the column and two rings of neighbours): for a wave of
+            // permanent form d(eta)/dt = C |grad(eta)| on the front face, so
+            //     C = sum(d(eta)/dt) / sum(|grad(eta)|),
+            //     n = -sum(grad(eta)) / |sum(grad(eta))|
+            // over the front-face columns (d(eta)/dt > 0, slope above
+            // crestSlope).  Without such columns C = sqrt(g D).
             forAll(onset, coli)
             {
-                onset[coli] = (uS[coli] > brkBkin*cc[coli]);
+                labelHashSet ring(16);
+                ring.insert(coli);
+                for (const label n1 : nbrs[coli])
+                {
+                    ring.insert(n1);
+                    for (const label n2 : nbrs[n1])
+                    {
+                        ring.insert(n2);
+                    }
+                }
+
+                scalar sumEtaT = 0, sumSlope = 0;
+                vector dir(Zero);
+
+                for (const label cj : ring)
+                {
+                    const scalar slope = Foam::sqrt(sqr(gx[cj]) + sqr(gy[cj]));
+
+                    if (etaT[cj] > 0 && slope > brkCrestSlope)
+                    {
+                        sumEtaT += etaT[cj];
+                        sumSlope += slope;
+                        dir -= vector(gx[cj], gy[cj], 0);
+                    }
+                }
+
+                scalar C = cc[coli];
+                scalar un = Foam::sqrt(sqr(ux[coli]) + sqr(uy[coli]));
+
+                if (sumSlope > VSMALL && mag(dir) > VSMALL)
+                {
+                    C = sumEtaT/sumSlope;
+                    dir /= mag(dir);
+                    un = ux[coli]*dir.x() + uy[coli]*dir.y();
+                }
+
+                onset[coli] = (un > brkBkin*C);
             }
         }
         else

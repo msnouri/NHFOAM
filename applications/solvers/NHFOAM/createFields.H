@@ -385,13 +385,16 @@ const scalar volume0 =
 //         model       HFA;    // none | HFA | eddyViscosity | hybrid
 //         onset       etaT;   // etaT | kinematic
 //         alpha       0.6;    // onset: d(eta)/dt > alpha sqrt(g D)
-//         Bkin        0.85;   // kinematic onset: |u_s| > Bkin sqrt(g D)
+//         Bkin        0.85;   // kinematic onset: u_s.n > Bkin C, crest
+//         crestSlope  0.01;   //   speed C from the front faces steeper
+//                             //   than crestSlope (updateBreaking.H)
 //         beta        0.3;    // persistence: d(eta)/dt > beta sqrt(g D)
 //         betaFinal   0.15;   // optional: persistence threshold falling
 //         Tstar       5;      //   from beta to betaFinal over the breaking
 //                             //   age T* = Tstar sqrt(D/g)
 //         delta       1.2;    // eddy viscosity mixing length
-//         verticalMixing no;  // eddy viscosity also between the layers
+//         verticalMixing 0;   // eddy viscosity between the layers: a
+//                             // fraction of nu_b, or yes (1) / no (0)
 //         hydrostaticFactor 1000;
 //     }
 // A column starts breaking at the onset criterion and keeps breaking while
@@ -450,6 +453,10 @@ if (breakingOnset != "etaT" && breakingOnset != "kinematic")
 const bool kinematicOnset(breakingOnset == "kinematic");
 const scalar hfaAlpha(breakingDict.getOrDefault<scalar>("alpha", 0.6));
 const scalar brkBkin(breakingDict.getOrDefault<scalar>("Bkin", 0.85));
+const scalar brkCrestSlope
+(
+    breakingDict.getOrDefault<scalar>("crestSlope", 0.01)
+);
 const scalar hfaBeta(breakingDict.getOrDefault<scalar>("beta", 0.3));
 const bool brkAgeing(breakingDict.found("betaFinal"));
 const scalar brkBetaFinal
@@ -458,10 +465,28 @@ const scalar brkBetaFinal
 );
 const scalar brkTstar(breakingDict.getOrDefault<scalar>("Tstar", 5));
 const scalar brkDelta(breakingDict.getOrDefault<scalar>("delta", 1.2));
-const bool brkVertical
-(
-    breakingDict.getOrDefault<bool>("verticalMixing", false)
-);
+// verticalMixing: fraction of nu_b on the layer faces (yes = 1, no = 0)
+scalar brkVertical = 0;
+if (breakingDict.found("verticalMixing"))
+{
+    ITstream& is = breakingDict.lookup("verticalMixing");
+    const token t(is);
+
+    if (t.isNumber())
+    {
+        brkVertical = t.number();
+    }
+    else if (t.isWord())
+    {
+        brkVertical = (Switch(t.wordToken()) ? 1 : 0);
+    }
+    else
+    {
+        FatalIOErrorInFunction(breakingDict)
+            << "verticalMixing: a switch (yes/no) or a fraction expected"
+            << exit(FatalIOError);
+    }
+}
 const scalar hfaFactor
 (
     breakingDict.getOrDefault<scalar>("hydrostaticFactor", 1000)
@@ -472,7 +497,7 @@ if (breakingOn)
     Info<< "Wave breaking: " << breakingModel << ", onset ";
     if (kinematicOnset)
     {
-        Info<< "|u_s| > " << brkBkin << " sqrt(g D)";
+        Info<< "u_s.n > " << brkBkin << " C (crest speed)";
     }
     else
     {
@@ -491,7 +516,12 @@ if (breakingOn)
     if (breakingVisc)
     {
         Info<< ", eddy viscosity delta " << brkDelta
-            << (brkVertical ? " (horizontal and vertical)" : " (horizontal)");
+            << (brkVertical > 0 ? " (horizontal, vertical x " : " (horizontal");
+        if (brkVertical > 0)
+        {
+            Info<< brkVertical;
+        }
+        Info<< ")";
     }
     Info<< nl << endl;
 }
@@ -630,7 +660,7 @@ if (breakingVisc)
     {
         forAll(lf[coli], i)
         {
-            w[lf[coli][i]] = (brkVertical ? 1 : 0);
+            w[lf[coli][i]] = brkVertical;
         }
     }
 
@@ -855,9 +885,10 @@ volScalarField::Internal botDrag
 );
 
 // Time averages from timeStart on (endTimeStep.H), written with the fields:
-//     averaging { timeStart 95; }
+//     averaging { timeStart 95; fields (k); }
 // UMean (cells; with uniform sigma layers the layer average of a column is
-// the mean depth-averaged velocity) and etaMean
+// the mean depth-averaged velocity), etaMean, and <field>Mean of the listed
+// scalar fields
 const dictionary* avgDictPtr = nhProperties.findDict("averaging");
 const scalar avgStart
 (
@@ -905,6 +936,40 @@ if (avgDictPtr)
 
     Info<< "Time averages UMean, etaMean from t = " << avgStart << nl
         << endl;
+}
+
+// Time averages of further scalar fields, e.g. averaging { fields (k nut); }:
+// <name>Mean
+const wordList avgScalarNames
+(
+    avgDictPtr
+  ? avgDictPtr->getOrDefault<wordList>("fields", wordList())
+  : wordList()
+);
+PtrList<volScalarField> avgScalarMeans(avgScalarNames.size());
+
+forAll(avgScalarNames, i)
+{
+    const volScalarField& f =
+        mesh.lookupObject<volScalarField>(avgScalarNames[i]);
+
+    avgScalarMeans.set
+    (
+        i,
+        new volScalarField
+        (
+            IOobject
+            (
+                avgScalarNames[i] + "Mean",
+                runTime.timeName(),
+                mesh,
+                IOobject::READ_IF_PRESENT,
+                IOobject::AUTO_WRITE
+            ),
+            mesh,
+            dimensionedScalar(f.dimensions(), Zero)
+        )
+    );
 }
 
 // Shoreline record (wetting and drying): time, wet columns, highest wet
