@@ -18,6 +18,11 @@
 #   BRK  : breaking and longshore-current runs (Ting & Kirby: wetdry.py,
 #          Hansen & Svendsen: the breakingSlope set-up, Visser case 4:
 #          longshore.py; NHWAVE run of Visser case 4 in $BRK/nw_visser)
+#   KW   : Ting & Kirby with the k-omega model (wetdry.tingkirby, rans=...)
+#   WM   : wave-input tests (wavemaker.py)
+#   UN   : unstructured meshes (unstructured.py: strip, strip_ref, cyl)
+#   BAR2 : submerged bar with the boundary wavemaker (make_case.bar_case)
+#   LS   : the landslide with its beach (make_case.enet_grilli_case)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -30,6 +35,11 @@ WD=${WD:-/home/claude/runs_wd}
 BP4=${BP4:-/home/claude/ext/nthmp/nthmp-benchmark-problems/BP04-JosephZ-Single_wave_on_simple_beach}
 TK94=${TK94:-/home/claude/ext/tk94/dfdm/examples/tingkirby94_spillingwaves/exp/tk94_fig4_spilling.dat}
 BRK=${BRK:-/home/claude/runs_brk}
+KW=${KW:-/home/claude/runs_kw}
+WM=${WM:-/home/claude/runs_wm}
+UN=${UN:-/home/claude/runs_un}
+BAR2=${BAR2:-/home/claude/runs_bar2}
+LS=${LS:-/home/claude/runs_ls}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -127,3 +137,40 @@ python3 plot_longshore.py $OUT/longshore.png --snapshot $BRK/ls_hybh \
     $BRK/ls_hybh:"NHFOAM, HFA + eddy viscosity" \
     $BRK/ls_hyb:"NHFOAM, ... with vertical mixing" $BRK/ls_hfa:"NHFOAM, HFA" \
     nhwave:$BRK/nw_visser:NHWAVE
+
+# Wave input: boundary wavemaker, absorption, return current, irregular waves
+python3 plot_wavemaker.py $WM $OUT
+python3 bar_longwaves.py 1.01 $RUNS_IF/ibarC_L10:"zone" $BAR2/barC_zone_rc:"zone, return current" \
+    $BAR2/barC_bc:"boundary wavemaker" nhwave:$CMP/nw_barC65:NHWAVE reef3d:$CMP/r3_barC65:REEF3D
+for t in 45 50 55 60 65; do
+    python3 plot_bar.py --caseC --tend $t $LAB/car_luth_AC/lab_data/CaseC /tmp/bar_bc_$t.png \
+        $RUNS_IF/ibarC_L10:"zone" $BAR2/barC_zone_rc:"zone, return current" \
+        $BAR2/barC_bc:"boundary wavemaker" | tail -1
+done
+python3 plot_bar.py --caseC --tend 65 $LAB/car_luth_AC/lab_data/CaseC $OUT/bar_bc_C.png \
+    $RUNS_IF/ibarC_L10:"NHFOAM, zone without return current" \
+    $BAR2/barC_zone_rc:"NHFOAM, zone with return current" \
+    $BAR2/barC_bc:"NHFOAM, boundary wavemaker"
+
+# Unstructured meshes
+python3 plot_unstructured.py runup $OUT/unstructured_runup.png $WD/final/ru \
+    $BP4/Lab_runup.txt $BP4/profs $UN/strip:"triangles, 2 cm" \
+    $UN/strip_ref:"triangles, 3 cm to 1.5 cm"
+python3 plot_unstructured.py cylinder $OUT/cylinder_diffraction.png $UN/cyl
+
+# Landslide with its beach
+python3 plot_enet_grilli.py $NHW/examples/landslide_benchmarks/BM2_enet_grilli/d61 \
+    $OUT/landslide_beach.png $LS/eg_beach:"NHFOAM, beach" \
+    $MA/landslide/nf_eg_ext_flt:"NHFOAM, wall at 0.2 m" nhwave:$CMP/nw_eg:NHWAVE
+
+# Ting & Kirby with the stabilised k-omega model
+TK7=${TK94%/*}/tk94_fig7_tke_spilling.dat
+python3 plot_tingkirby.py $TK94 $OUT/tk_komega.png \
+    $BRK/tk_hybh3:"NHFOAM, HFA + eddy viscosity (10 layers)" \
+    $KW/tk_kw20:"NHFOAM, \$k\$--\$\\omega\$ (20 layers)" \
+    $KW/tk_kwhfa10:"NHFOAM, HFA + \$k\$--\$\\omega\$ (10 layers)" nhwave:$WD/tk/nw_tk:NHWAVE
+python3 plot_undertow.py $TK5 $OUT/tk_komega_undertow.png \
+    $BRK/tk_hybh3:"HFA + eddy viscosity" $KW/tk_kw20:"\$k\$--\$\\omega\$, 20 layers" \
+    $KW/tk_kwhfa10:"HFA + \$k\$--\$\\omega\$" nhwave:$WD/tk/nw_tk:NHWAVE
+python3 plot_tke.py $TK7 $OUT/tk_komega_tke.png $KW/tk_kw20:"\$k\$--\$\\omega\$, 20 layers" \
+    $KW/tk_kwl0:"\$\\lambda_2 = 0\$, 20 layers" $KW/tk_kwhfa10:"HFA + \$k\$--\$\\omega\$, 10 layers"

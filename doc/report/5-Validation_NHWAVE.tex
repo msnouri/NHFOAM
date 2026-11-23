@@ -201,7 +201,7 @@ fitted at $x = 22$ m (Fig.~\ref{fig:ma-bar}, Table~\ref{tab:ma-bar}).
 
 \begin{figure}[p]
 \centering
-\includegraphics[width=\textwidth]{ma2012_bar.pdf}
+\includegraphics[width=0.9\textwidth]{ma2012_bar.pdf}
 \caption{Submerged bar, case A, 3 layers: \NHFOAM\ (flux extrapolation,
 \code{filteredLinear2V}), NHWAVE and \NHFOAM\ before the fix of the time
 integration, against \citet{luth1994}.}
@@ -387,6 +387,30 @@ up and are partly dissipated. This test
 needs the beach to be conclusive; with the wetting and drying of
 Section~\ref{sec:wd} it can now be rerun with it.
 
+\paragraph{With the beach.} The run was repeated with the slope continued
+0.25 m inland of the still-water shoreline (the bed 6.7 cm above the still
+water) and wetting and drying (5 mm film), otherwise unchanged (147\,600
+cells; Fig.~\ref{fig:ma-landslide-beach}). The leading trough and crest
+change by less than 4\%, and the trailing waves are no smaller: the
+largest crest and the two after it are 17.3, 15.7 and 10.7 mm at g2
+(wall: 16.7, 14.9, 10.3), 23.4, 18.2 and 11.3 mm at g3 (24.1, 17.4, 11.7)
+and 12.7, 11.6 and 10.7 mm at g4 (12.8, 10.3, 11.1). The wall is therefore
+not the cause of the excess. The trailing waves ($kh = 3$--5) follow the
+convection scheme instead: they were smaller with the more dissipative TVD
+scheme before the fixes, and NHWAVE's shock-capturing scheme damps them
+most. Whether the measured decay of the trailing waves is physical damping
+that an inviscid model lacks, or comes from details of the slide motion,
+remains open.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{landslide_beach.pdf}
+\caption{3D rigid landslide, $d = 61$ mm: \NHFOAM\ with the beach and
+wetting and drying, with the wall 0.2 m from the shoreline, and NHWAVE,
+against \citet{enet2007}.}
+\label{fig:ma-landslide-beach}
+\end{figure}
+
 \FloatBarrier
 \subsection{Summary of the problems found and their fixes}
 \label{sec:ma-summary}
@@ -410,8 +434,9 @@ breaking (Section~\ref{sec:breaking}) & pressure correctors diverge under bores 
 standing wave (Section~\ref{sec:ma-basin}) & short steep waves damped (8.5\% in 30 s) & TVD limiter & \code{filteredLinear2V} for non-breaking waves: error 0.16--0.25\% for $kD\ge2\pi$ \\
 solitary wave (Section~\ref{sec:ma-solitary}) & height $-6.4\%$, crest 0.77 m late in 150 m & convecting flux of level $n$: first order in time & flux extrapolation \eqref{eq:fluxext}: $-1.0\%$, 0.07 m, no extra cost \\
 submerged bar (Section~\ref{sec:ma-bar}) & phase closer to the lab before the fix & the first-order lag cancelled an error shared with NHWAVE & none yet; the phase now agrees with NHWAVE \\
+submerged bar, long runs (Section~\ref{sec:bar-bc}) & phase drifts by 0.21 s in 20 s & no return current in the wave-making zone & return current (default), or the boundary wavemaker: no drift, steady 1.0 cm error \\
 elliptic shoal (Section~\ref{sec:ma-berkhoff}) & run fails at 35 s in a shallow corner & waves break there; filtered scheme, no breaking model & \code{limitedLinearV} and HFA wherever waves break: the run goes on, same errors \\
-landslide (Section~\ref{sec:ma-landslide}) & trailing waves 1.5--3 times too large & probably the wall that replaces the beach & rerun with the beach (now possible) \\
+landslide (Section~\ref{sec:ma-landslide}) & trailing waves 1.5--3 times too large & not the wall: the run with the beach gives the same & open \\
 run-up (Section~\ref{sec:wd-runup}) & front too slow, $R/d = 0.41$; oscillating swash & centred face depth, interpolated flux at the tip & upwind (TVD) face depth, supercritical upwind flux: $R/d = 0.531$ (NHWAVE 0.512) \\
 surf zone (Section~\ref{sec:wd-tk}) & heights 6 cm too large at $x = 8$ m & too little dissipation behind the hydrostatic front & breaking age and eddy viscosity (Section~\ref{sec:brk}): mean surf-zone error $+6.1 \to +3.5$ cm (NHWAVE $+4.8$) \\
 longshore current (Section~\ref{sec:brk-ls}) & breaking region crept into deep water along oblique crests & columns joined at the aged threshold & join at $\beta\sqrt{gD}$ \\

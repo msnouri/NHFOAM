@@ -65,47 +65,91 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         its strength. With the HFA alone the current is 0.19 m/s and too
         close to the shoreline, as \citet{ma2012} found without turbulent
         diffusion.
+  \item \textbf{Breaking parameters and closures.} Varied one at a time,
+        the parameters of the default model show a shallow optimum near
+        their published values: no change of $\alpha$, $\beta_F$ or
+        $\delta_b$ moves the surf-zone errors by more than 8\%, and none
+        removes the slow loss of height just after the breaking point.
+        The kinematic onset with the crest speed estimated from the front
+        face and $B_k = 0.70$ breaks at the measured place on the beach of
+        \citet{ting1994}, with the smallest surf-zone error so far ($+2.4$
+        cm), and 0.7 m early on that of \citet{hansen1979}. The stabilised
+        $k$--$\omega$ model of \citet{larsen2018} keeps the turbulence of
+        the nearly potential flow 30--60\% below that of the unstabilised
+        model, but it does not replace the breaking model: without it the
+        waves break 1.8 m late, and with the HFA it adds little
+        dissipation.
+  \item \textbf{Wave input.} The boundary wavemaker makes the target
+        waves to within 0.5\%, and its active absorption keeps a closed
+        flume steady (incident amplitude $1.03\,a$, against a beat between
+        $0.1\,a$ and $1.1\,a$ without it); as an absorbing boundary it
+        reflects 0.3--1.7\% of waves with $kh \le 1$ when given the wave's
+        phase speed. Irregular JONSWAP waves keep the target spectrum,
+        with $H_{m0}$ within $-4\%$ and $+2\%$ over 8 peak wavelengths.
+  \item \textbf{Long runs.} The drift of the phase over the submerged bar
+        (0.21 s in 20 s) came from the missing return current of the
+        wave-making zone. With the return current, now the default, or the
+        boundary wavemaker, the runs are steady, with an error of 1.0 cm
+        in every window, and \NHFOAM's waves arrive 0.12 s early behind the
+        bar crest, like those of NHWAVE and REEF3D::NHFLOW.
+  \item \textbf{Unstructured meshes.} On triangulated strips the breaking
+        solitary wave runs up to $R/d = 0.49$ (structured 0.531, lab
+        0.49--0.55) and its backwash is slower; on a mesh refined around a
+        vertical cylinder the diffracted waves are within 7\% of the theory
+        of \citet{maccamy1954}.
+  \item \textbf{Reproducibility.} Restarts continue the run to round-off,
+        parallel runs reproduce serial ones with breakers across processor
+        boundaries ($4\times10^{-7}$ m), and a regression suite of ten
+        short cases checks both against stored references. The landslide
+        rerun with its beach and wetting and drying showed that the wall
+        was not the cause of its large trailing waves.
 \end{itemize}
 
 \paragraph{Limitations.}
 \begin{itemize}[nosep]
-  \item \textbf{Wetting and drying} has been tested in 2DV only, with uniform
-        horizontal cells near the shoreline. The film acts as a wet bed, so
-        thin swash flows run slower than over a truly dry bed (in NHWAVE as
-        well), and puddles of a few millimetres above the film stay on the
-        beach in the backwash. A narrow cell at the shoreline raises the
-        errors. It needs the interface pressure layout.
+  \item \textbf{Wetting and drying} has been tested in 2DV and on
+        triangulated strips. The film acts as a wet bed, so thin swash flows
+        run slower than over a truly dry bed (in NHWAVE as well), and
+        puddles of a few millimetres above the film stay on the beach in
+        the backwash; on triangles the run-up is 8\% lower than on the
+        structured mesh and the backwash slower. A narrow cell at the
+        shoreline raises the errors. It needs the interface pressure
+        layout.
   \item \textbf{Breaking} has been tested on two spilling-breaker beaches
         and the longshore current. With the eddy viscosity the decay inside
         the surf zone is close to the measured one, but just after the
-        breaking point the models lose too little height (the heights are
-        3.5--4 cm too large at $x = 8$ m on the beach of \citet{ting1994}),
-        the breaking point is 0.2--0.6 m from the measured one, and the
-        parameters
-        ($\alpha$, $\beta$, $\beta_F$, $T_s$, $\delta_b$) are those of
-        \citet{smit2013} and \citet{kennedy2000}, not tuned. The kinematic
-        onset needs a better estimate of the crest speed than $\sqrt{gD}$.
-  \item \textbf{Wave generation} uses relaxation zones with linear or
-        stream-function targets. There is no boundary wavemaker and no
-        irregular input.
-  \item \textbf{Long waves in closed flumes.} The zones absorb long waves only
-        partly and the wave-making zone does not conserve volume, so long waves
-        of a few millimetres build up and shift the phase over shallow bars in
-        long runs.
+        breaking point the models lose too little height (3.5--4 cm too
+        much at $x = 8$ m on the beach of \citet{ting1994}), and no
+        parameter of the model removes this. The kinematic onset with
+        $B_k \approx 0.7$--0.8 is promising but has been tested on the two
+        2DV beaches only. The crest-speed estimate does not look across
+        processor boundaries.
+  \item \textbf{Turbulence closure.} The stabilised $k$--$\omega$ model
+        gives the undertow its measured strength but, with the HFA, half
+        the measured turbulent kinetic energy and little dissipation; it
+        does not replace the breaking eddy viscosity.
+  \item \textbf{Wave generation} is linear (no second-order correction
+        for the bound long waves of wave groups). The absorbing boundary
+        is uniform over the depth, so waves with $kh > 1.5$ are reflected
+        by 9--13\%. Directional spreading has not been tested in a basin.
+        Irregular waves lose 3--5\% of $H_{m0}$ over 12 m in the peak band,
+        for a reason not yet identified.
   \item \textbf{Landslide trailing waves} are 1.5--3 times the measured ones
-        (Sections~\ref{sec:seabed} and \ref{sec:ma-landslide}), probably
-        because a wall replaces the beach.
+        (Sections~\ref{sec:seabed} and \ref{sec:ma-landslide}); the beach is
+        not the cause.
+  \item \textbf{OpenFOAM version.} The code was compiled and run with
+        v1912 only; its API calls were checked against the v2512 headers.
 \end{itemize}
 
 \paragraph{Plans.} In order of priority:
 \begin{enumerate}[nosep]
-  \item breaking: the transition just after the breaking point, the crest
-        speed of the kinematic onset, and stabilised $k$--$\omega$
-        \citep{larsen2018} for many-layer runs; the longshore current on the
-        grid of \citet{ma2012};
-  \item the landslide of Section~\ref{sec:ma-landslide} with its beach;
-  \item volume-conserving wave-making zones and absorption of long waves;
-  \item irregular wave generation and a boundary wavemaker;
+  \item breaking: the transition just after the breaking point; the
+        kinematic onset ($B_k \approx 0.7$--0.8) on more beaches and on the
+        longshore current, also on the grid of \citet{ma2012};
+  \item second-order wave generation, and a directional-spreading test in
+        a basin;
+  \item the trailing waves of the landslide (slide motion, dissipation);
+  \item a build and the regression suite with a current OpenFOAM release;
   \item depth-integrated granular slides for landslide tsunamis;
   \item coupling to \code{interFoam} and \code{sedInterFoam} through relaxation
         zones, and hybrid meshes around structures.

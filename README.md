@@ -16,7 +16,10 @@ function objects.
 > prescribed seabed motion (tsunami generation, solid landslides),
 > depth-induced breaking (hydrostatic front approximation and a breaking
 > eddy viscosity with a breaking age), wetting and drying (moving
-> shorelines, run-up) after NHWAVE, periodic (cyclic) lateral boundaries and
+> shorelines, run-up) after NHWAVE, wave generation in relaxation zones or
+> by a boundary wavemaker with active absorption (regular, stream-function
+> and irregular/directional waves, with a return current), a stabilised
+> k–ω closure, periodic (cyclic) lateral boundaries, exact restarts and
 > wave-averaged output. See *Limitations* and *Roadmap* below.
 >
 > **Report:** the model, its verification and its validation against NHWAVE
@@ -169,15 +172,20 @@ contains the volume pushed up by the bottom. Two motions are built in:
 
 **Breaking.** A column starts breaking when ∂η/∂t > α√(gD) (Smit, Zijlema &
 Stelling 2013), or optionally when the horizontal velocity of its surface
-cell exceeds B_k√(gD) (kinematic onset, B_k = 0.85 after Barthelemy et al.
-2018, with √(gD) as the estimate of the crest speed). It keeps breaking, and
-a neighbouring column joins it, while ∂η/∂t > η_t*. Without `betaFinal`,
+cell in the direction of propagation exceeds B_k C (kinematic onset after
+Barthelemy et al. 2018, `onset kinematic`). The crest speed C and the
+direction n come from the front faces in the column and its two rings of
+neighbours (∂η/∂t > 0, |∇η| > `crestSlope`): for a wave of permanent form
+∂η/∂t = C|∇η| there, so C = Σ∂η/∂t / Σ|∇η| and n = −Σ∇η/|Σ∇η|. Without
+front faces C = √(gD). The two rings stop at processor boundaries. A
+column keeps breaking, and a neighbouring column joins it, while
+∂η/∂t > η_t*. Without `betaFinal`,
 η_t* = β√(gD) as in Smit et al. With `betaFinal`, η_t* falls from β√(gD) to
 β_F√(gD) over the age t − t₀ of the breaking event, T* = T_s√(D/g), as in
 the eddy-viscosity model of Kennedy et al. (2000); a column that joins next
 to an older breaker takes over its age, so the age travels with the wave and
-the breaking region grows over the face of a mature bore. Neighbours include
-columns across cyclic patches and processor boundaries. Two
+the breaking region grows over the face of a mature bore. The joining
+neighbours include columns across cyclic patches and processor boundaries. Two
 treatments act in the breaking columns (`model HFA`, `eddyViscosity` or
 `hybrid` for both):
 
@@ -196,7 +204,8 @@ treatments act in the breaking columns (`model HFA`, `eddyViscosity` or
 - *Breaking eddy viscosity* (Kennedy et al. 2000). The momentum equation
   gets ∇·(ν_b∇u) with ν_b = B δ_b² D ∂η/∂t, B = min[max(η_t/η_t* − 1, 0), 1],
   δ_b = 1.2, uniform over the column. It acts through the side faces
-  (horizontal mixing; `verticalMixing yes` adds the layer faces), not
+  (horizontal mixing; `verticalMixing` puts a fraction 0–1 of ν_b on the
+  layer faces, `yes`/`no` = 1/0), not
   through closed faces of dry columns, and is implicit in u. The
   non-hydrostatic pressure is kept.
 
@@ -274,13 +283,26 @@ This builds:
 
 | target | what |
 |---|---|
-| `libNHFOAM` | σ-column structure, mesh motion, the interface pressure matrix and the `sigmaColumn` preconditioner, linear wave theory, relaxation zones, seabed motion, the `nhMovingSlipVelocity` condition |
+| `libNHFOAM` | σ-column structure, mesh motion, the interface pressure matrix and the `sigmaColumn` preconditioner, wave theories (linear, irregular, stream function), relaxation zones, seabed motion, the conditions `nhMovingSlipVelocity` and `nhWaveVelocity` (boundary wavemaker) |
+| `libNHFOAMturbulenceModels` | `kOmegaLF`: k–ω (Wilcox 2006) with the stabilisation of Larsen & Fuhrman (2018) |
 | `NHFOAM` | the solver |
 | `nhSetWaves` | initial conditions: `standing`, `solitary`, `linear`, `circularMode` |
 
-*Compatibility.* The code was compiled and run with OpenFOAM v1912. Every API
-call was checked against the v2512 headers, and only calls present in both
-versions are used. `./Allwclean` removes the build.
+*Compatibility.* The code was compiled and run with OpenFOAM v1912. The API
+calls were checked against the v2512 headers, and only calls present in both
+versions are used (the turbulence model follows the v1912 template of
+OpenFOAM's `kOmega`; its headers were not available to check). `./Allwclean`
+removes the build.
+
+*Tests.* `validation/regression.py <workDir>` runs ten short cases (about
+3 minutes on one core: standing and solitary waves, the boundary wavemaker
+with regular and irregular waves, a dam break and the run-up with wetting
+and drying, breaking on Ting & Kirby's beach, the k–ω model, a bottom
+uplift and a triangulated beach) and compares their gauge records with the
+stored references (`regression_ref.json`). It also checks that a parallel
+run (2 processors, the breaker crossing the processor boundary) and a run
+restarted at half time reproduce the serial, continuous run. `--update`
+stores new references.
 
 ---
 
@@ -292,7 +314,10 @@ works:
 
 - `blockMesh` with vertical block edges (sloping bottoms are fine);
 - `extrudeMesh` from a 2D mesh;
-- gmsh `Extrude {…} {Layers{n}; Recombine;}`, then `gmshToFoam`.
+- gmsh `Extrude {…} {Layers{n}; Recombine;}`, then `gmshToFoam`
+  (triangles become prisms; `validation/unstructured.py` has two examples,
+  a beach on a triangulated strip and a cylinder in a mesh refined around
+  it, with the points then moved onto the bathymetry).
 
 Build the bathymetry into the mesh, with the top of the mesh at the still
 water level. The solver detects the columns at start-up and reports
@@ -331,8 +356,11 @@ flags and ages (`breakingAge`) and the averaging time. A run restarted from
 a written time keeps the mesh it was written with and continues as if it had
 not stopped (Ting & Kirby with breaking and wetting and drying, restarted
 after 6 s: η within 6·10⁻¹⁴ m of the continuous run after another 6 s;
-bottom uplift within 10⁻¹⁸ m). Without the state (older output) it starts
-afresh: Euler first step, mesh placed on η.
+bottom uplift within 10⁻¹⁸ m). This needs the fields written at full
+precision (`writePrecision 17`, or `writeFormat binary`): with 10 digits the
+truncated state differs by 10⁻¹⁰ relative, and in breaking runs the on/off
+breaking flags can turn that into millimetres within seconds. Without the
+state (older output) it starts afresh: Euler first step, mesh placed on η.
 
 **`constant/NHFOAMProperties`:**
 
@@ -361,8 +389,17 @@ forcingZones
         waveHeight  0.02;  wavePeriod 2.02;  depth 0.4;
         direction   (1 0 0);
         rampTime    4.04;
+        // returnCurrent no;  // default yes (linear, irregular): -M/h,
+        //                    // M = g a^2/(2c), so the target carries no
+        //                    // net volume (closed flume, as NHWAVE)
         // theory streamFunction; waveNumber ...; uMean ...;
         // etaCoeffs (...); psiCoeffs (...);  <- validation/stream_function.py
+        // theory irregular;  Hs 0.03;  Tp 1.5;  gamma 3.3;  // JONSWAP
+        // nFrequencies 100;  fMin 0.33;  fMax 2;  seed 1;
+        // nDirections 11;  spreading 10;  maxAngle 60;     // cos^2s((th-th0)/2)
+        // periodicWidth 5.6; // directions moved to fit a periodic width
+        // components ((0.01 1.5 0 0) (0.005 1.2 20 1.3)); // or explicit:
+        //                    // amplitude [m], period [s], angle [deg], phase
     }
     outlet
     {
@@ -385,12 +422,14 @@ breaking
     model       hybrid;      // HFA | eddyViscosity | hybrid (both) | none
     onset       etaT;        // etaT | kinematic
     alpha       0.6;         // onset:       d(eta)/dt > alpha sqrt(g D)
-    Bkin        0.85;        // kinematic onset: |u_s| > Bkin sqrt(g D)
+    Bkin        0.85;        // kinematic onset: u_s.n > Bkin C, crest speed
+    crestSlope  0.01;        //   C from the front faces steeper than this
     beta        0.3;         // persistence: d(eta)/dt > beta  sqrt(g D)
     betaFinal   0.15;        // optional: persistence threshold falls from
     Tstar       5;           //   beta to betaFinal over Tstar sqrt(D/g)
     delta       1.2;         // eddy viscosity nu_b = B delta^2 D d(eta)/dt
-    verticalMixing no;       // nu_b also between the layers
+    verticalMixing 0;        // fraction of nu_b between the layers
+                             //   (yes = 1, no = 0)
     hydrostaticFactor 1000;  // extra vertical coupling in HFA columns
 }
 
@@ -452,6 +491,62 @@ dry columns on the film at the start.
 With a moving bottom, use `nhMovingSlipVelocity` for U on the bottom patch,
 and add `libs ("libNHFOAM.so");` to `system/controlDict` so that utilities
 such as `decomposePar` know that condition.
+
+**Boundary wavemaker and absorbing boundary.** Instead of a wave-making
+zone, a side patch can make the waves itself: `nhWaveVelocity` imposes the
+velocity of the target wave (the same entries as a `wave` zone, any theory,
+with the return current) at the face centres, which follow the free surface,
+and lets out the waves that come back from the inside (active absorption,
+Schäffer & Klopman 2000):
+
+```c++
+// 0/U
+inlet
+{
+    type             nhWaveVelocity;
+    activeAbsorption yes;            // default yes
+    absorptionCelerity shallow;      // sqrt(g h) | wave (phase speed of the
+                                     // target) | a value [m/s]
+    wave
+    {
+        theory      linear;          // linear | irregular | streamFunction
+        waveHeight  0.041;  wavePeriod 1.01;  depth 0.4;
+        direction   (1 0 0);
+        rampTime    2.02;
+    }
+    value            uniform (0 0 0);
+}
+```
+
+U = U_target + (c/h)(η − η_target) n, with n the outward normal and η the
+elevation of the boundary column, uniform over the depth. With
+`waveHeight 0` the patch is an absorbing boundary (give the period of the
+waves to absorb with `absorptionCelerity wave`). `p_rgh` and `eta` keep the
+wall conditions (`fixedFluxPressure`, `zeroGradient`); add
+`libs ("libNHFOAM.so");` to `controlDict` for the utilities. The tests are
+in 5.7.
+
+**Turbulence.** Any incompressible turbulence model of OpenFOAM can be used
+(`constant/turbulenceProperties`): the Smagorinsky LES model for the
+longshore current (6.8), or the stabilised k–ω model `kOmegaLF` of
+`libNHFOAMturbulenceModels` (Larsen & Fuhrman 2018) for surf zones resolved
+with many layers:
+
+```c++
+simulationType  RAS;
+RAS
+{
+    RASModel        kOmegaLF;
+    turbulence      on;
+    // kOmegaLFCoeffs { lambda1 0.875; lambda2 0.05; }  // lambda2 0: Wilcox
+}
+```
+
+with `k`, `omega` and `nut` fields (wall functions `kqRWallFunction`,
+`omegaWallFunction`, `nutkWallFunction` on a no-slip bottom; see
+`validation/make_case.py`: `rans_files`). The model limits ω̃ from below by
+λ₂ (β/(β*γ)) (p₀/p_Ω) ω, which keeps the eddy viscosity small in the nearly
+potential flow before breaking.
 
 You also need `constant/g` (along −z), `transportProperties` and
 `turbulenceProperties`, as in pimpleFoam.
@@ -541,6 +636,7 @@ structuredCoeffs { method simple; patches (bottom); simpleCoeffs { n (2 1 1); } 
 | `breakingSlope` | Hansen & Svendsen (1979) spilling breakers on a 1:34 slope with the hydrostatic front approximation and the breaking eddy viscosity, and a velocity-only sponge (about 8 min) |
 | `beachRunup` | solitary wave (H/d = 0.28) breaking and running up a 1:20 beach with **wetting and drying** (Synolakis 1987; NTHMP benchmark 4; about 40 s); prints the maximum run-up (R/d = 0.52, lab about 0.5) |
 | `longshoreCurrent` | **longshore current** on a 1:20 beach (Visser 1991, case 4; test 4.7 of Ma et al. 2012): oblique stream-function waves, periodic alongshore, breaking eddy viscosity, Smagorinsky model, log-law friction, wetting and drying, time-averaged velocity (48 000 cells, 100 s; about 1.5 h on one core) |
+| `irregularWaves` | **JONSWAP waves** (Hs = 3 cm, Tp = 1.5 s) from the **boundary wavemaker** `nhWaveVelocity` with active absorption, and an absorbing boundary at the other end, without relaxation zones (2DV flume, 120 s; about 10 min) |
 
 Each case runs with `./Allrun` and cleans with `./Allclean`. `validation/`
 holds the scripts used to generate cases and make the figures below
@@ -717,8 +813,11 @@ ranking. Case C:
 NHFOAM's long waves are the largest of the three and shift its phase the
 most. The lab flume had long waves of its own, which no model reproduces,
 so the comparison above uses the earliest window in which all gauges are
-settled. Volume-conserving wave-making zones and long-wave absorption
-(roadmap) would make long runs comparable.
+settled. The drift was later traced to the missing return current of the
+wave-making zone: with the return current (now the default) or the
+boundary wavemaker, the runs are steady and the error is about 1.0 cm in
+every window, with the waves 0.12 s early over the bar like those of the
+other two models (5.7).
 
 Behind the bar, the interface pressure also made NHFOAM's records nearly
 periodic. Over the last 15 periods of case C, the heights at 37–41 m vary by
@@ -778,8 +877,8 @@ interface pressure matters. They now follow the measured phase, as NHWAVE's
 do; with the cell-centred pressure they were too slow and fell further
 behind with every wave. Their amplitude is still too large: the third and
 fourth crests are up to 2–3 times the measured ones, while NHWAVE follows
-the measured decay. The wall that replaces NHFOAM's beach also affects them
-after t/t₀ ≈ 1.5. The lab records are in the same NHWAVE example folder.
+the measured decay. The wall that replaces NHFOAM's beach is not the cause
+(6.5). The lab records are in the same NHWAVE example folder.
 
 ### 5.6 Breaking
 
@@ -861,6 +960,151 @@ behind the bores and the run fails within a wave period of the first
 breaking. In the cell layout, the switch is also sensitive to the time
 step: with Δt = 5 ms instead of 10 ms, the same case fails after 11
 periods.
+
+### 5.7 Wave input: boundary wavemaker, absorption, return current, irregular waves
+
+`validation/wavemaker.py` writes the cases, `plot_wavemaker.py` makes the
+figures. Flat flume, h = 0.4 m, 10 layers, Δx = 2 cm, Δt = 10 ms, regular
+waves of H = 2 cm and T = 1.5 s (kh = 0.96) unless stated. Incident and
+reflected amplitudes come from a least-squares fit of
+A_j = a_I e^{ikx_j} + a_R e^{−ikx_j} to the first harmonic at 30–70 gauges
+(Zelt & Skjelbreia 1992).
+
+- **Boundary wavemaker** (`nhWaveVelocity` at x = 0, 6 m sponge at the far
+  end): H = 0.995 H_target on average and within 0.7% over 13.5 m;
+  reflection of the flume 0.4%. A 6 m (2.3 wavelengths) relaxation zone
+  gives 0.998 H_target and 0.16%, with the domain 6 m longer.
+- **Closed flume** (wall 10 m from the wavemaker): with active absorption the
+  incident amplitude settles at 1.03 a within 5 periods and stays there for
+  the 60 periods of the run (a_R/a_I = 0.99 at the wall). Without
+  absorption the wavemaker reflects the returning waves, which beat with
+  the generated ones: the incident amplitude swings between 0.1 a and 1.1 a
+  with a period of about 40 s.
+- **Absorbing boundary** (`waveHeight 0`, waves from a 6 m zone, boundary at
+  14 m), reflection coefficient:
+
+  | T | kh | `absorptionCelerity shallow` | `absorptionCelerity wave` | 8 m sponge instead |
+  |---|---|---|---|---|
+  | 2.5 s | 0.53 | 1.9% | 0.3% | 0.2% |
+  | 1.5 s | 0.96 | 5.9% | 1.7% | 0.4% |
+  | 1.0 s | 1.72 | 12.6% | 9.3% | < 0.1% |
+
+  The shallow-water absorber follows (1 − c/√(gh))/(1 + c/√(gh)), the
+  mismatch of its depth-averaged velocity with that of the wave; with the
+  phase speed of the wave it reflects 3–6 times less for kh ≤ 1, but a
+  depth-uniform correction cannot match the profile of shorter waves. A
+  sponge of several wavelengths still absorbs best, at the cost of the
+  domain.
+- **Return current.** In a closed flume of constant depth (6 m wave-making
+  zone, wall 10 m further on) the mean water level of the flume stays within
+  0.1 mm with or without it, and with the boundary wavemaker within 0.2 mm;
+  there the mismatch only steps the mean level inside the zone. Over the
+  submerged bar it is what keeps long runs steady (below).
+- **Irregular waves** (JONSWAP, Hs = 3 cm, Tp = 1.5 s, γ = 3.3, 100
+  components, spectra over 200 s): from a 6 m relaxation zone and from the
+  boundary wavemaker the spectra keep the target shape, and Hm0 is within
+  −4% to +2% of the target over 12 m (8 peak wavelengths), with the peak
+  period of the target. In all runs Hm0 falls by 3–5% between 2 and 12 m
+  from the generator, through a slow loss of energy in the peak band that
+  the convection scheme does not change (TVD or filtered central) and that
+  regular waves of the peak period and 2 cm height do not show; its cause
+  is not yet identified.
+
+![wave input](doc/figures/wavemaker_regular.png)
+
+![absorbing boundary](doc/figures/wavemaker_absorber.png)
+
+![irregular waves](doc/figures/wavemaker_irregular.png)
+
+**The submerged bar: return current and long waves.** Case C of 5.4
+(H = 4.1 cm, T = 1.01 s, 10 layers, Δt = 5 ms) on the same mesh, with the
+8 m wave-making zone with and without the return current, and with the
+boundary wavemaker at x = 0 (active absorption, return current):
+
+| | rms error, windows ending at 45 / 50 / 55 / 60 / 65 s | lag of the first harmonic, 35.7 m behind 22 m, 45 → 65 s | spread of the mean level over the gauges |
+|---|---|---|---|
+| zone, no return current (5.4) | 0.49 / 0.65 / 0.94 / 1.18 / 1.39 cm | 0.98 → 1.19 s | 1.9–3.6 mm |
+| zone, return current | 1.03 / 1.01 / 1.00 / 1.00 / 1.03 cm | 0.83 → 0.84 s | 0.7–0.8 mm |
+| boundary wavemaker | 0.90 / 0.99 / 1.00 / 0.98 / 0.98 cm | 0.86 → 0.85 s | 0.7–2.5 mm |
+| NHWAVE (5.4) | 1.08 / 1.02 / 0.97 / 0.89 / 0.77 cm | 0.80 → 0.84 s | 0.9–2.1 mm |
+| REEF3D::NHFLOW (5.4) | 0.93 / 0.92 / 0.92 / 0.98 / 1.10 cm | 0.85 → 0.78 s | 0.9–1.6 mm |
+| lab | | 0.96 s | |
+
+The drift of section 5.4 came from the missing return current: without it
+the wave-making zone imposes no mean flow while the closed flume needs one,
+and the resulting mean currents and long waves shift the waves over the
+0.1 m deep crest. With the return current, in the zone or at the
+wavemaker, the run is steady: the phase no longer drifts, the mean level
+varies by less than 1 mm along the flume, and the error is about 1.0 cm in
+every window. NHFOAM then has the waves 0.12 s early at 35.7 m, as NHWAVE
+and REEF3D::NHFLOW do (0.1–0.18 s); the smaller errors of the zone run in
+short windows came from the drift passing the measured phase. Long runs are
+now comparable.
+
+![bar with the boundary wavemaker](doc/figures/bar_bc_C.png)
+
+### 5.8 Unstructured meshes
+
+`validation/unstructured.py` builds the meshes with gmsh (triangles extruded
+into prisms), `plot_unstructured.py` makes the figures.
+
+**Run-up on a triangulated strip.** The breaking solitary wave of 6.6
+(H/d = 0.28, HFA, 5 mm film, no friction, 3 layers) on a 10 cm wide strip
+of Delaunay triangles with 2 cm edges (19 986 prisms, slip side walls) and
+on a strip refined from 3 cm offshore to 1.5 cm from x = 7 m on (19 083
+prisms), against the structured run of 6.6 (Δx = 2 cm, one cell wide):
+
+| mesh | cells | max run-up R/d (at t√(g/d)) | profiles, rms difference to the structured run | shoreline at t√(g/d) = 60 | CPU |
+|---|---|---|---|---|---|
+| structured, 2 cm | 1 650 | 0.531 (42.5) | | 0.12 d | 39 s |
+| triangles, 2 cm | 19 986 | 0.489 (45.3) | 0.05–2.0% of d | 0.35 d | 689 s |
+| triangles, 3 → 1.5 cm | 19 083 | 0.490 (45.6) | 0.5–0.7% of d | | 576 s |
+| lab | | 0.49–0.55 | | | |
+
+Until the wave reaches the beach the profiles agree closely; on the
+triangles it runs up 8% less, 3 t* later, and the backwash is slower.
+With the upwind face depth instead of the vanLeer reconstruction the run-up
+on the 2 cm triangles is 0.507 (structured: 0.531 with either), so about
+half of the difference comes from the TVD reconstruction of the face depth
+on triangles; the backwash stays slow (0.38 d at t* = 60). A prism costs
+1.5 times a hexahedron per time step.
+
+![run-up on triangles](doc/figures/unstructured_runup.png)
+
+**Diffraction by a vertical cylinder.** Regular waves (H = 1 cm, T = 1 s,
+h = 0.3 m: kh = 1.37) from the boundary wavemaker meet a vertical cylinder of
+radius a = 0.2 m (ka = 0.92), half domain 8 m × 4 m with a symmetry wall on
+the axis, triangles of 2.5 cm at the cylinder growing to 6 cm 0.6 m away,
+4 layers (97 156 prisms, 30 min on one core for 16 s). Against the linear
+diffraction theory of MacCamy & Fuchs (1954), the first-harmonic amplitude
+over t = 8–12 s (before the waves scattered back by the side wall and the
+wavemaker return) is within 0.07 a_I rms around the cylinder (largest
+error 0.095 a_I) and 0.06 a_I rms at all 70 gauges; the run-up in front
+of the cylinder is 1.62 a_I (theory 1.71). Later windows include the
+reflections from the walls of the half domain (0.135 a_I rms).
+
+![cylinder](doc/figures/cylinder_diffraction.png)
+
+### 5.9 Parallel runs, restarts and the regression suite
+
+- **Breaking across processor boundaries.** Ting & Kirby's beach with the
+  default breaking model, 20 s on two processors with the boundary at
+  x = 8 m in the surf zone, reproduces the serial run to 4·10⁻⁷ m at all
+  gauges (3.0 cm before the breaking ages were exchanged through the
+  processor patches). Gauges on a face between two columns now always take
+  the same column, so that the records do not depend on the rounding of
+  the mesh points.
+- **Restarts** (section 3): 6·10⁻¹⁴ m after a restart with breaking, wetting
+  and drying, with the fields written at full precision.
+- **Regression suite** (`validation/regression.py`, section 2): ten short
+  cases against stored references; the parallel run of its breaking case
+  (`structured` decomposition, the boundary near the breaking point) matches
+  the serial one to 2·10⁻⁷ m, the restarted run to 10⁻¹² m.
+- **Run time on 1 and 2 cores** (`structured` decomposition, an otherwise
+  idle 2-core machine): Ting & Kirby's beach with breaking and wetting and
+  drying (9 200 cells, 10 s) 102 s → 62 s (speed-up 1.64), the 3D landslide
+  tutorial (35 280 cells, 4 s) 252 s → 131 s (1.92). The parallel runs
+  reproduce the serial ones to 3·10⁻⁸ and 9·10⁻⁸ m.
 
 ---
 
@@ -1016,6 +1260,19 @@ slide sends shoreward are reflected there and reach the gauges at about
 test needs the beach to be conclusive; with wetting and drying (6.6) it can
 now be rerun with it.
 
+**With the beach.** Rerun with the slope continued 0.25 m inland of the
+shoreline (bed 6.7 cm above the still water) and wetting and drying (5 mm
+film; `make_case.enet_grilli_case(xWall=-0.25)`), the leading waves change
+by less than 4% and the trailing waves are no smaller: largest crest and
+the two after it 17.3, 15.7, 10.7 mm at g2; 23.4, 18.2, 11.3 at g3; 12.7,
+11.6, 10.7 at g4. The wall is not the cause. The trailing waves (kh = 3–5)
+follow the convection scheme instead (smaller with the TVD scheme before
+the fixes, smallest with NHWAVE's shock-capturing scheme); whether the
+measured decay is physical damping that an inviscid model lacks, or comes
+from details of the slide motion, remains open.
+
+![landslide with the beach](doc/figures/landslide_beach.png)
+
 ### 6.6 Wetting and drying (test 4.5, and the surf zone)
 
 The method is summarised in section 1; `validation/wetdry.py` builds the
@@ -1105,7 +1362,7 @@ measured one, stations x > 6.5 m):
 | **HFA + eddy viscosity** (`hybrid`, default) | 17.6, 6.2 m | 12.9 | 6.6 | **+3.5** | 0.8 | 1.32 |
 | … with vertical mixing | 17.7, 6.3 m | 13.4 | 8.1 | +4.4 | 1.1 | 0.65 |
 | eddy viscosity alone (vertical mixing) | 18.0, 6.5 m | 13.2 | 8.0 | +4.1 | 1.2 | 0.62 |
-| kinematic onset, B_k = 0.85 | 21.1, 7.1 m | 13.0 | 5.3 | +3.1 | 0.9 | 1.38 |
+| kinematic onset, B_k = 0.85, C = √(gD) (see below) | 21.1, 7.1 m | 13.0 | 5.3 | +3.1 | 0.9 | 1.38 |
 | NHWAVE (k–ε, 20 layers) | 18.0, 6.9 m | 16.1 | 6.4 | +4.8 | 0.0 | 1.63 |
 
 The eddy viscosity nearly halves the surf-zone error of the HFA and brings it
@@ -1136,6 +1393,76 @@ water level (4.6 → 2.2 mm), with the same error before breaking (0.56 cm);
 it breaks 0.6 m early, with the largest height 0.3 cm low.
 
 ![Hansen and Svendsen](doc/figures/hs_breaking.png)
+
+**Sensitivity.** One parameter at a time around the default (α = 0.6,
+β = 0.3, β_F = 0.15, T* = 5, δ_b = 1.2, horizontal mixing), on both beaches
+(Ting & Kirby: largest H and where, mean error of H for x > 7 m, strongest
+undertow relative to the measured one; Hansen & Svendsen: largest H and
+where, rms error of H for x > 8.3 m):
+
+| | T&K: largest H, cm (at x, m) | T&K: mean error of H, x > 7 m (cm) | T&K: undertow | H&S: largest H (at x) | H&S: rms of H, x > 8.3 m (cm) |
+|---|---|---|---|---|---|
+| lab | 16.5 (6.0) |  | 1 | 10.4 (8.2) |  |
+| **default** | 17.6 (6.2) | +3.5 | 1.32 | 10.1 (7.6) | 1.54 |
+| α = 0.5 | 17.1 (6.1) | +3.5 | 1.36 | 10.1 (7.3) | 1.59 |
+| α = 0.7 | 18.3 (6.4) | +3.5 | 1.31 | 9.9 (7.6) | 1.53 |
+| β_F = 0.10 | 17.5 (6.2) | +3.3 | 1.33 | 10.3 (7.6) | 1.42 |
+| β_F = 0.20 | 17.5 (6.2) | +3.7 | 1.34 | 9.9 (7.7) | 1.62 |
+| δ_b = 0.9 | 17.6 (6.2) | +3.8 | 1.39 | 10.0 (7.7) | 1.83 |
+| δ_b = 1.5 | 17.8 (6.2) | +3.3 | 1.29 | 10.2 (7.6) | 1.44 |
+| vertical mixing 0.1 | 17.6 (6.1) | +4.4 | 0.78 |  |  |
+| vertical mixing 0.3 | 17.5 (6.5) | +4.3 | 0.64 | 10.8 (7.9) | 2.08 |
+| vertical mixing 1 | 17.7 (6.3) | +4.4 | 0.65 |  |  |
+| kinematic onset, B_k = 0.85 | 20.2 (6.9) | +3.1 | 1.35 | 11.5 (7.8) | 1.37 |
+| kinematic onset, B_k = 0.70 | 17.3 (5.9) | +2.4 | 1.46 | 9.8 (7.5) | 1.42 |
+
+The breaking point and the surf-zone errors hardly depend on α. A longer
+breaking event (β_F = 0.10) or a stronger eddy viscosity (δ_b = 1.5) lowers
+the surf-zone errors on both beaches by 4–8%, the opposite changes raise
+them by 5–19%: the default sits near a shallow optimum, and no parameter
+removes the slow loss of height just after the breaking point (H at 8 m
+stays at 12.8–13.4 cm, measured 9.3 cm). A tenth of ν_b through the layer
+faces already flattens the undertow (0.78 of the measured strongest
+offshore velocity, the closest profiles) but raises the surf-zone errors by
+a quarter to a third. The kinematic onset now estimates the crest speed C
+from the front face around each column (∂η/∂t = C|∇η| for a wave of
+permanent form) instead of √(gD). With B_k = 0.85 it still breaks late
+on Ting & Kirby's beach (20.2 cm at 6.9 m): the surface cell of a 10-layer column is half a
+layer below the crest, where the velocity is smaller. With B_k = 0.70 the
+waves break at the measured place (17.3 cm at 5.9 m, measured 16.5 cm at
+6.0 m) and the surf-zone error is the smallest of all runs (+2.4 cm), while
+on Hansen & Svendsen's beach the same threshold breaks 0.7 m early (rms
+1.42 cm). The kinematic onset with B_k ≈ 0.7–0.8 is a promising
+alternative to the default, to be tested on more cases first.
+
+**Stabilised k–ω.** `kOmegaLF` (Wilcox 2006 with the limiter of Larsen &
+Fuhrman 2018) on Ting & Kirby's beach, 20 layers, no-slip bottom with wall
+functions:
+
+| | largest H (at x) | H at 8 m | H at 11 m | mean error of H, x > 7 m | undertow | (k/gh)^½, x = 7.28 / 9.72 m |
+|---|---|---|---|---|---|---|
+| lab | 16.5 (6.0 m) | 9.3 | 3.9 | | 1 | 0.038 / 0.065 |
+| default (`hybrid`, 10 layers) | 17.6 (6.2 m) | 12.9 | 6.6 | +3.5 | 1.32 | |
+| k–ω, 20 layers, no breaking model | 23.9 (7.8 m) | 22.6 | 12.0 | +10.1 | 0.85 | 0.031 / 0.144 |
+| … λ₂ = 0 (unstabilised) | 23.4 (7.8 m) | 22.5 | 7.9 | +8.3 | 0.78 | 0.051 / 0.185 |
+| HFA + k–ω, 10 layers | 17.2 (6.2 m) | 15.5 | 9.8 | +6.1 | 1.21 | 0.023 / 0.042 |
+| NHWAVE, k–ε, 20 layers | 18.0 (6.9 m) | 16.1 | 6.4 | +4.8 | 1.63 | |
+
+Without a breaking model the waves keep steepening 1.8 m past the measured
+breaking point (23.9 cm): the non-hydrostatic pressure keeps the front from
+steepening, and the closure's eddy viscosity grows only once it is steep.
+The turbulent kinetic energy is right at the first two stations, then
+grows under the too-high waves; without the stabilisation it is 30–60%
+higher everywhere, the over-production Larsen & Fuhrman describe. With the
+HFA the waves break at the right place, but the closure adds little
+dissipation behind the hydrostatic front (+6.1 cm, as the HFA alone) and
+gives half the measured turbulent kinetic energy. The breaking eddy
+viscosity therefore stays the dissipation mechanism; the closure helps the
+vertical structure (the undertow has the measured strength).
+
+![k-omega](doc/figures/tk_komega.png)
+
+![k-omega TKE](doc/figures/tk_komega_tke.png)
 
 ### 6.8 Longshore current on a plane beach (test 4.7)
 
@@ -1181,35 +1508,38 @@ the likely main cause of the deficit both models share here.
 
 ## 7. Limitations (this version)
 
-- **Wetting and drying** has been tested in 2DV, on meshes with uniform
-  cells near the shoreline. The film acts as a wet bed (in NHWAVE too), so
-  thin swash flows run slower than over a truly dry bed, and puddles of a
-  few millimetres above the film stay on the beach in the backwash. A narrow
-  cell at the shoreline raises the errors. It needs the interface pressure.
+- **Wetting and drying** has been tested in 2DV and on triangulated strips.
+  The film acts as a wet bed (in NHWAVE too), so thin swash flows run slower
+  than over a truly dry bed, and puddles of a few millimetres above the film
+  stay on the beach in the backwash; on triangles the run-up is 8% lower
+  than on the structured mesh and the backwash slower (5.8). A narrow cell
+  at the shoreline raises the errors. It needs the interface pressure.
 - **Breaking.** Tested on two spilling-breaker beaches and the longshore
   current (6.7, 6.8). With the eddy viscosity the decay inside the surf zone
-  is close to the measured one, but just after the breaking point the models
+  is close to the measured one, but just after the breaking point the waves
   lose too little height (3.5–4 cm too much at x = 8 m on Ting & Kirby's
-  beach), and the breaking point is 0.2–0.6 m from the measured one. The
-  parameters are those of Smit et al. (2013) and Kennedy et al. (2000), not
-  tuned. The kinematic onset needs a better crest-speed estimate than
-  √(gD).
+  beach), and no parameter of the model removes this. The kinematic onset
+  with B_k ≈ 0.7–0.8 is promising but tested on the two 2DV beaches only;
+  its crest-speed estimate does not look across processor boundaries.
+- **Turbulence closure.** `kOmegaLF` gives the undertow its measured
+  strength but does not replace the breaking eddy viscosity (6.7).
 - **Longshore current** (test 4.7) has been run on a grid three to four
   times coarser alongshore than Ma et al.'s. There both NHFOAM and NHWAVE
-  give two thirds of the measured current, at about the right place.
-- **Wave generation** is by relaxation zones with linear or stream-function
-  targets. There is no boundary wavemaker and no irregular input.
-- **Long waves in closed flumes.** The relaxation zones absorb long waves
-  only partly, and the wave-making zone does not conserve volume (no return
-  current for the Stokes drift). Long waves of a few millimetres therefore
-  build up in closed flumes. Over the submerged bar they shift the phase of
-  the waves by about 0.2 s within 20 s of simulated time, more than in
-  NHWAVE and REEF3D::NHFLOW (5.4). Compare long runs at the same times.
+  give two thirds of the measured current, at about the right place
+  (`longshore.visser(..., dx=0.0343, ny=128, nproc=8)` writes the fine grid).
+- **Wave generation** is linear (no second-order correction for the bound
+  long waves of groups). The absorbing boundary is uniform over the depth
+  and reflects 9–13% at kh ≈ 1.7. Directional spreading has not been tested
+  in a basin. Irregular waves lose 3–5% of Hm0 over 12 m, in the peak band,
+  for a reason not yet identified (5.7).
 - **Trailing waves of the landslide** are up to three times the measured
-  ones (5.5, 6.5), probably because a wall replaces the beach.
+  ones (5.5, 6.5); the beach is not the cause.
 - **Phase over the submerged bar.** With 3 layers, NHFOAM and NHWAVE both
-  have the waves behind the bar up to 0.08 s early (6.3). The cause (linear
-  wave generation, long waves of the flume) is not yet identified.
+  have the waves behind the bar up to 0.08 s early (6.3), and with 10 layers
+  all three models are 0.1–0.18 s early in case C (5.7).
+- **OpenFOAM version.** Compiled and run with v1912; the API calls were
+  checked against the v2512 headers, but the code has not been built with a
+  newer release.
 
 ## 8. Roadmap
 
@@ -1227,20 +1557,22 @@ run-up of test 4.5 and the surf zone of Ting & Kirby (6.6). Then the
 breaking age and breaking eddy viscosity (Kennedy et al. 2000) with the
 kinematic onset option, periodic lateral boundaries, log-law friction and
 time averaging, with Ting & Kirby's undertow (6.7) and the longshore current
-of test 4.7 (6.8).
+of test 4.7 (6.8). Then breaking across processor boundaries, exact
+restarts, the crest-speed estimate of the kinematic onset, fractional
+vertical mixing, the stabilised k–ω closure and the sensitivity study
+(6.7); the boundary wavemaker with active absorption, the return current
+and irregular waves (5.7); triangulated meshes with breaking, wetting and
+drying and diffraction (5.8); the landslide with its beach (6.5); and the
+regression suite (5.9).
 
-The comparisons with NHWAVE and REEF3D::NHFLOW (sections 5 and 6) set the
-order:
+Next:
 
-1. Breaking: the transition just after the breaking point, a crest-speed
-   estimate for the kinematic B = u/c onset, and stabilised k–ω (Larsen &
-   Fuhrman 2018) for many-layer runs; the longshore current on Ma et al.'s
-   grid.
-2. The landslide of 6.5 with its beach.
-3. Steady long runs: volume-conserving wave-making zones (with a return
-   current for the Stokes drift, as in a closed flume) and absorbing zones
-   that also take out the long waves of the flume (see 5.4).
-4. Irregular spectra in the relaxation zones; a boundary wavemaker.
+1. Breaking: the transition just after the breaking point; the kinematic
+   onset (B_k ≈ 0.7–0.8) on more beaches and on the longshore current, also
+   on Ma et al.'s grid.
+2. Second-order wave generation; a directional-spreading test in a basin.
+3. The trailing waves of the landslide (slide motion, dissipation).
+4. A build and the regression suite with a current OpenFOAM release.
 5. Depth-integrated granular slides on a finite-area mesh for landslide
    tsunamis (NTHMP benchmarks 4–5).
 6. One-way, then two-way, coupling to interFoam/sedInterFoam relaxation
@@ -1319,6 +1651,22 @@ order:
   DRP-91-1, US Army Engineer Waterways Experiment Station.
 - Chen, Q., Kirby, J.T., Dalrymple, R.A., Shi, F., Thornton, E.B. (2003).
   Boussinesq modeling of longshore currents. *JGR* 108(C11), 3362.
+- Wilcox, D.C. (2006). *Turbulence Modeling for CFD*, 3rd ed. DCW
+  Industries.
+- Schäffer, H.A., Klopman, G. (2000). Review of multidirectional active wave
+  absorption methods. *J. Waterway, Port, Coastal, Ocean Eng.* 126, 88–97.
+- Higuera, P., Lara, J.L., Losada, I.J. (2013). Realistic wave generation
+  and active wave absorption for Navier–Stokes models: application to
+  OpenFOAM. *Coastal Engineering* 71, 102–118.
+- Hasselmann, K. et al. (1973). Measurements of wind-wave growth and swell
+  decay during the Joint North Sea Wave Project (JONSWAP). *Ergänzungsheft
+  zur Deutschen Hydrographischen Zeitschrift*, Reihe A, 8(12).
+- Zelt, J.A., Skjelbreia, J.E. (1992). Estimating incident and reflected wave
+  fields using an arbitrary number of wave gauges. *Proc. 23rd ICCE*,
+  777–789.
+- MacCamy, R.C., Fuchs, R.A. (1954). Wave forces on piles: a diffraction
+  theory. Technical Memorandum 69, Beach Erosion Board, US Army Corps of
+  Engineers.
 
 ## License
 

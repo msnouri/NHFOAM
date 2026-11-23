@@ -64,11 +64,15 @@ def visser(case, dx=0.04, ny=40, nz=5, dt=0.0102, tEnd=100.0, avgPeriods=5,
            zone=1.5, flat=0.5, xLand=0.6, film=0.003, ks=0.0008,
            brk_model="hybrid", brk_extra=AGE + "\n    delta       1.2;",
            alpha=0.6, beta=0.3, les_Ck=0.094, N=24, gauge_dx=0.05,
-           writeEvery=10.0, conv="Gauss limitedLinearV 1"):
+           writeEvery=10.0, conv="Gauss limitedLinearV 1", nproc=None):
     """NHFOAM case of Visser's case 4.  les_Ck: Smagorinsky subgrid model of
     the OpenFOAM library (None: laminar).  brk_model None: no breaking
     model.  The mean velocity UMean is averaged over the last avgPeriods
-    periods; eta is recorded along y = Ly/2 and y = Ly/4."""
+    periods; eta is recorded along y = Ly/2 and y = Ly/4.  nproc: also
+    write a decomposeParDict that cuts the beach alongshore into nproc
+    strips of whole columns (decomposePar, then mpirun -np nproc NHFOAM
+    -parallel).  The grid of Ma et al. (2012), 280 x 128 cells:
+        visser("ls_fine", dx=0.0343, ny=128, nproc=8)"""
     sol, th, Ly = wave(N)
     dy = Ly / ny
     x0 = -(zone + flat)
@@ -142,7 +146,27 @@ gauges
             "surface": "zeroGradient", "bottom": "zeroGradient",
             "left": "zeroGradient", "right": "zeroGradient",
             "front": "cyclic", "back": "cyclic"})
-    mc.allrun(case, """
+    if nproc:
+        mc.write(case, "system/decomposeParDict", "dictionary", f"""numberOfSubdomains {nproc};
+method          structured;     // whole columns on one processor
+structuredCoeffs
+{{
+    method      simple;
+    patches     (bottom);
+    simpleCoeffs
+    {{
+        n       (1 {nproc} 1);
+    }}
+}}
+""")
+        mc.allrun(case, f"""
+runApplication blockMesh
+runApplication decomposePar
+runParallel NHFOAM
+runApplication reconstructPar
+""")
+    else:
+        mc.allrun(case, """
 runApplication blockMesh
 runApplication NHFOAM
 """)

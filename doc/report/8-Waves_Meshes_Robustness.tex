@@ -1,0 +1,300 @@
+\FloatBarrier
+\section{Wave input, unstructured meshes and robustness}
+\label{sec:ext}
+
+This section tests what was added after the comparisons with NHWAVE: the
+boundary wavemaker with active absorption, the return current and irregular
+waves (Section~\ref{sec:zones}), the model on triangulated meshes, and the
+checks that keep the code reproducible: parallel runs, restarts and a
+regression suite.
+
+\subsection{Boundary wavemaker and active absorption}
+\label{sec:wm}
+
+The tests (script \code{wavemaker.py}) use a flat flume ($h = 0.4$ m,
+10 layers, $\Delta x = 2$ cm, $\Delta t = 10$ ms) with regular waves of
+$H = 2$ cm and $T = 1.5$ s ($kh = 0.96$) unless stated otherwise. Incident
+and reflected amplitudes come from a least-squares fit of
+$A_j = a_I e^{ikx_j} + a_R e^{-ikx_j}$ to the first harmonic at 30--70
+gauges \citep{zelt1992}, with $k$ adjusted to the model's own wave number
+(within 0.1\% of linear theory in the runs of progressive waves).
+
+\paragraph{Progressive waves.} With the wavemaker at $x = 0$ and a 6 m
+sponge at the far end, the wave height is within 0.7\% of the target over
+13.5 m (mean $0.995H$), and the reflection coefficient of the flume is
+0.4\%. A 6 m relaxation zone (2.3 wavelengths) gives $0.998H$ and 0.16\%
+(Fig.~\ref{fig:wm-reg}a), with a domain 6 m longer.
+
+\paragraph{Closed flume.} With a wall 10 m from the wavemaker, the waves
+reflected by the wall return to the wavemaker. With active absorption the
+incident amplitude settles at $1.03\,a$ within 5 periods and stays there for
+the 60 periods of the run, with a standing wave of $a_R/a_I = 0.99$ in
+front of the wall. Without absorption the wavemaker reflects the returning
+waves, which beat with the generated ones: the incident amplitude swings
+between $0.1\,a$ and $1.1\,a$ with a period of about 40 s
+(Fig.~\ref{fig:wm-reg}b). The 3\% excess with absorption is the
+re-reflection of the shallow-water absorber at this $kh$ (below).
+
+\paragraph{Absorbing boundary.} The same condition with zero wave height
+lets waves out of the domain. Regular waves made by a 6 m relaxation zone
+and absorbed 8 m further on give the reflection coefficients of
+Table~\ref{tab:wm-abs} and Fig.~\ref{fig:wm-abs}. With the shallow-water
+celerity the reflection follows the estimate
+$(1 - c/\sqrt{gh})/(1 + c/\sqrt{gh})$, the mismatch between the imposed
+depth-averaged velocity $\sqrt{g/h}\,\eta$ and that of the wave,
+$c\,\eta/h$: 1.9\% at $kh = 0.53$, 5.9\% at 0.96 and 12.6\% at 1.72. With
+the phase speed of the waves (\code{absorptionCelerity wave}) the
+depth-averaged velocity matches, and the reflection falls to 0.3\% and
+1.7\% for $kh \le 1$; for shorter waves a correction that is uniform over
+the depth cannot match the profile of the wave (9.3\% at $kh = 1.72$). A
+sponge layer of 2--5 wavelengths reflects less than 0.5\%, at the cost of
+the domain.
+
+\begin{table}[!htbp]
+\centering
+\caption{Reflection coefficient of the absorbing boundary and of an 8 m
+sponge layer, regular waves of $H = 2$ cm in $h = 0.4$ m.}
+\label{tab:wm-abs}
+\small
+\begin{tabular}{ccccc}
+\toprule
+$T$ & $kh$ & \code{absorptionCelerity shallow} & \code{absorptionCelerity wave} & 8 m sponge \\
+\midrule
+2.5 s & 0.53 & 1.9\% & 0.3\% & 0.2\% \\
+1.5 s & 0.96 & 5.9\% & 1.7\% & 0.4\% \\
+1.0 s & 1.72 & 12.6\% & 9.3\% & $<0.1$\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Return current.} In a closed flume of constant depth (a 6 m
+wave-making zone, a wall 10 m further on) the mean water level of the flume
+stays within 0.1 mm of still water with or without the return current
+(Fig.~\ref{fig:wm-reg}c), and within 0.2 mm with the boundary wavemaker and
+absorption: the zone relaxes the surface to the target, so the missing
+return current only steps the mean level inside the zone. Over the
+submerged bar it matters (Section~\ref{sec:bar-bc}).
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{wavemaker_regular.pdf}
+\caption{Wave input in a flat flume ($h = 0.4$ m, $H = 2$ cm, $T = 1.5$ s):
+(a) wave height from the boundary wavemaker and from a relaxation zone;
+(b) incident amplitude in a closed 10 m flume with and without active
+absorption; (c) the mean water level of closed flumes with a relaxation
+zone (with and without the return current) and with the wavemaker of (b).}
+\label{fig:wm-reg}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.65\textwidth]{wavemaker_absorber.pdf}
+\caption{Reflection coefficient of the absorbing boundary (\code{nhWaveVelocity}
+with zero wave height) with the shallow-water celerity and with the phase
+speed of the waves, and of an 8 m sponge layer; the dotted line is the
+depth-averaged estimate for the shallow-water absorber.}
+\label{fig:wm-abs}
+\end{figure}
+
+\subsection{Irregular waves}
+\label{sec:irr}
+
+JONSWAP waves ($H_s = 3$ cm, $T_p = 1.5$ s, $\gamma = 3.3$, 100 components
+between $0.5f_p$ and $3f_p$, random phases) were made in the same flume by a
+6 m relaxation zone and by the boundary wavemaker, and the spectra were
+computed at six gauges over 200 s (Welch, 40 s segments;
+Fig.~\ref{fig:wm-irr}). Both keep the shape of the target spectrum and its
+peak period (1.47 s, the frequency resolution of the spectra), and $H_{m0}$
+stays within $-4\%$ and $+2\%$ of the target over 12 m (8 peak
+wavelengths). In all runs $H_{m0}$ falls by 3--5\% between 2 and 12 m from
+the generator. The loss is in the peak band (0.6--0.75 Hz: 18\% of its
+energy over 10 m), it is the same with filtered central convection as with
+the TVD scheme, and regular waves of the peak period and 2 cm height do
+not show it; its cause is not yet identified.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{wavemaker_irregular.pdf}
+\caption{JONSWAP waves ($H_s = 3$ cm, $T_p = 1.5$ s, $\gamma = 3.3$, 100
+components) from a relaxation zone and from the boundary wavemaker:
+(a) spectra 2 and 12 m from the generator against the target; (b) $H_{m0}$
+along the flume.}
+\label{fig:wm-irr}
+\end{figure}
+
+\subsection{The submerged bar: return current and long waves}
+\label{sec:bar-bc}
+
+In case C of the submerged bar (Section~\ref{sec:bar10}) the phase of the
+waves over the bar drifted during the run, and with it the rms error
+(Table~\ref{tab:barwindow}). The case was rerun on the same mesh with the
+8 m wave-making zone and the return current, and with the boundary
+wavemaker at $x = 0$ (active absorption and return current) in place of
+the zone (Table~\ref{tab:bar-bc}, Fig.~\ref{fig:bar-bc}).
+
+\begin{table}[!htbp]
+\centering
+\caption{Submerged bar, case C, 10 layers: rms error over the 10 gauges for
+windows ending at 45--65 s, the time lag of the first harmonic at
+$x = 35.7$ m behind $x = 22$ m from the window ending at 45 s to that
+ending at 65 s (NHWAVE: 60 s), and the spread of the mean water level over
+the gauges.}
+\label{tab:bar-bc}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lccccccc}
+\toprule
+ & \multicolumn{5}{c}{rms error (cm), window ending at} & lag (s) & mean level \\
+\cmidrule(lr){2-6}
+ & 45 s & 50 s & 55 s & 60 s & 65 s & 45 $\to$ 65 s & spread (mm) \\
+\midrule
+zone, no return current (Sec.~\ref{sec:bar10}) & 0.49 & 0.65 & 0.94 & 1.18 & 1.39 & $0.98 \to 1.19$ & 1.9--3.6 \\
+zone, return current & 1.03 & 1.01 & 1.00 & 1.00 & 1.03 & $0.83 \to 0.84$ & 0.7--0.8 \\
+boundary wavemaker & 0.90 & 0.99 & 1.00 & 0.98 & 0.98 & $0.86 \to 0.85$ & 0.7--2.5 \\
+NHWAVE & 1.08 & 1.02 & 0.97 & 0.89 & 0.77 & $0.80 \to 0.84$ & 0.9--2.1 \\
+REEF3D::NHFLOW & 0.93 & 0.92 & 0.92 & 0.98 & 1.10 & $0.85 \to 0.78$ & 0.9--1.6 \\
+lab & & & & & & 0.96 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The drift came from the missing return current. A wave-making zone without
+it imposes no mean flow, while the waves carry the Stokes transport into the
+closed flume, which must return as a mean current; the mismatch drives mean
+currents and long waves, which shift the waves over the 0.1 m deep crest.
+With the return current, in the zone or at the wavemaker, the lag no longer
+drifts (0.01 s in 20 s instead of 0.21 s), the mean water level varies by
+less than 1 mm along the flume once the wave train has passed, and the
+error is about 1.0 cm in every window. \NHFOAM\ then has the waves 0.12 s
+early at $x = 35.7$ m, like NHWAVE and REEF3D::NHFLOW (0.1--0.18 s); the
+smaller errors of the run without the return current in short windows came
+from the drift passing through the measured phase. The test of a closed
+flume of constant depth (Fig.~\ref{fig:wm-reg}c) is not sensitive to the
+return current, because there the mismatch only steps the mean level inside
+the zone, by a fraction of a millimetre.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{bar_bc_C.pdf}
+\caption{Submerged bar, case C, 10 layers, window ending at 65 s: the
+wave-making zone without and with the return current, and the boundary
+wavemaker, against \citet{luth1994}.}
+\label{fig:bar-bc}
+\end{figure}
+
+\subsection{Unstructured meshes}
+\label{sec:unstr}
+
+\NHFOAM\ takes any horizontal mesh extruded into columns. The circular basin
+of Section~\ref{sec:basic} used triangles for a linear standing mode; two
+tests now use them with breaking, wetting and drying, and for wave
+scattering by a body (\code{validation/unstructured.py}: gmsh triangles
+extruded into prisms, the points then moved onto the bathymetry).
+
+\paragraph{Run-up on a triangulated strip.} The breaking solitary wave of
+Section~\ref{sec:wd-runup} ($H/d = 0.28$, HFA, 5 mm film, no friction, 3
+layers) was run on a 10 cm wide strip of Delaunay triangles with 2 cm edges
+(6662 triangles, 19\,986 prisms, slip side walls) and on a strip refined
+from 3 cm offshore to 1.5 cm from $x = 7$ m on (19\,083 prisms), against the
+structured run of Section~\ref{sec:wd-runup} ($\Delta x = 2$ cm, one cell
+wide). Until the wave reaches the beach the profiles of the three runs agree
+to 0.05--0.7\% of $d$ (rms; Fig.~\ref{fig:unstr-runup}). On the triangles
+the wave runs up to $R/d = 0.489$ and 0.490, against 0.531 on the
+structured mesh and 0.49--0.55 in the experiments, and it gets there
+3\,$t^*$ later; the backwash is slower, and at $t\sqrt{g/d} = 60$ the
+shoreline of the triangles is still at $0.35\,d$ (structured $0.12\,d$).
+With the upwind face depth instead of the vanLeer reconstruction
+(Section~\ref{sec:wd}) the run-up on the 2 cm triangles is 0.507, while the
+structured mesh gives 0.531 with either; about half of the difference
+therefore comes from the TVD reconstruction of the face depth on
+triangles, whose gradients are less accurate than on the regular mesh. The
+backwash stays slow (0.38\,$d$ at $t\sqrt{g/d} = 60$). The cost per cell
+and time step is 1.5 times that of the hexahedra.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{unstructured_runup.pdf}
+\caption{Solitary wave run-up ($H/d = 0.28$) on triangulated strips and on
+the structured mesh: profiles averaged across the strip, and the shoreline
+(highest wet bed) over time.}
+\label{fig:unstr-runup}
+\end{figure}
+
+\paragraph{Diffraction by a vertical cylinder.} Regular waves of
+$H = 1$ cm and $T = 1$ s in $h = 0.3$ m ($kh = 1.37$) from the boundary
+wavemaker at $x = -3$ m meet a vertical cylinder of radius $a = 0.2$ m
+($ka = 0.92$) at the origin. The half domain, 8 m by 4 m with a symmetry
+wall on the axis and a 2.6 m sponge at the far end, has triangles of 2.5 cm
+at the cylinder that grow to 6 cm 0.6 m away, and 4 layers (24\,289
+triangles, 97\,156 prisms; Fig.~\ref{fig:cyl}a). The first-harmonic
+amplitude over $t = 8$--12 s, after the waves have built up around the
+cylinder and before those scattered back by the side wall and the
+wavemaker return, is compared with the linear diffraction theory of
+\citet{maccamy1954}. Around the cylinder the error is 0.07\,$a_I$ rms (at
+most 0.095\,$a_I$); the run-up in front of it is 1.62\,$a_I$, against 1.71
+(Fig.~\ref{fig:cyl}b). Along the axis in front of the cylinder the partial
+standing wave has the right nodes and antinodes, the shadow behind it and
+the pattern across are within a few percent of the theory, and over all 70
+gauges the error is 0.06\,$a_I$ rms (Fig.~\ref{fig:cyl}c). In the window
+that ends at 16 s the reflections from the walls of the half domain have
+arrived (0.135\,$a_I$ rms around the cylinder). The run took 30 min on one
+core for 16 s.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.78\textwidth]{cylinder_diffraction.pdf}
+\caption{Diffraction by a vertical cylinder ($kh = 1.37$, $ka = 0.92$):
+(a) the triangulated mesh near the cylinder and the gauges at
+$r = a + 2$ cm; (b) amplitude around the cylinder; (c) amplitude along the
+axis and across, against the theory of \citet{maccamy1954}.}
+\label{fig:cyl}
+\end{figure}
+
+\subsection{Parallel runs, restarts and regression tests}
+\label{sec:robust}
+\label{sec:brk-par}
+
+\paragraph{Breaking across processor boundaries.} A breaker that crosses a
+processor boundary must be flagged as in a serial run: the flags spread
+over neighbouring columns, and the persistence threshold depends on the age
+of the breaking event, which travels with the wave. Ting \& Kirby's beach
+with the default breaking model, run for 20 s on two processors with the
+boundary at $x = 8$ m in the surf zone, now reproduces the serial run to
+$4\times10^{-7}$ m at all gauges; before the ages were exchanged through the
+processor patches (Section~\ref{sec:numhfa}) the difference reached 3.0 cm.
+Gauges on a face between two columns are now always given to the same
+column (the first one, also across processors), so that the records do not
+depend on the rounding of the mesh points.
+
+\paragraph{Restarts.} \NHFOAM\ writes its state with the fields: the time
+levels of $\eta$, the face velocities of the last two levels, the surface
+pressure unknowns, the breaking flags and ages, and the averaging time
+(\code{uniform/NHFOAMState}). A restarted run keeps the mesh it was written
+with and continues the BDF2 integration and the flux extrapolation. Ting \&
+Kirby's beach (breaking, wetting and drying, averaging) restarted after 6 s
+matches the continuous run to $6\times10^{-14}$ m in $\eta$ after another
+6 s, and the bottom uplift to $10^{-18}$ m; without the state (Euler first
+step, mesh placed on $\eta$) the differences were 2.5 mm and 4 cm/s. This
+needs the fields at full precision (17 digits or binary): with 10 digits the
+written state differs by $10^{-10}$, and the on/off breaking flags amplify
+that to millimetres within seconds.
+
+\paragraph{Regression suite.} \code{validation/regression.py} runs ten short
+cases in about three minutes on one core (standing and solitary waves, the
+boundary wavemaker with regular and irregular waves, a dam break and the
+run-up with wetting and drying, breaking on Ting \& Kirby's beach, the
+$k$--$\omega$ model, a bottom uplift and the triangulated beach) and compares
+the extremes and final values of their gauge records with stored references.
+It also checks that the breaking case run on two processors (with the
+\code{structured} decomposition, the boundary near the breaking point) and
+restarted at half time reproduces the serial, continuous run: to
+$2\times10^{-7}$ m and $10^{-12}$ m.
+
+\paragraph{Parallel speed-up.} On an otherwise idle machine with two cores
+and the \code{structured} decomposition, Ting \& Kirby's beach with
+breaking and wetting and drying (9200 cells, 10 s) took 102 s on one core
+and 62 s on two (speed-up 1.64), and the 3D landslide tutorial (35\,280
+cells, 4 s) 252 s and 131 s (1.92); the parallel runs reproduce the serial
+ones to $3\times10^{-8}$ and $9\times10^{-8}$ m. The smaller 2DV case loses
+more to the exchanges of the interface matrix and the breaking flags per
+step.

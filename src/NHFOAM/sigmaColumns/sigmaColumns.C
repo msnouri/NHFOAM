@@ -202,6 +202,23 @@ void Foam::sigmaColumns::findLines()
     pointLine_.setSize(mesh_.nPoints(), -1);
     pointSigma_.setSize(mesh_.nPoints(), 0);
 
+    // Tolerance on the horizontal offset of a vertical edge: 1e-6 of its
+    // height, or 1e-3 of the shortest horizontal edge of the surface patch
+    // (points written in ASCII with a finite precision are not exactly
+    // above each other, which matters for the thin layers of dry columns)
+    scalar hMin = GREAT;
+    {
+        const edgeList& se = sp.edges();
+        const pointField& sPts = sp.localPoints();
+        forAll(se, ei)
+        {
+            const vector d = se[ei].vec(sPts);
+            hMin = min(hMin, Foam::sqrt(sqr(d.x()) + sqr(d.y())));
+        }
+    }
+    reduce(hMin, minOp<scalar>());
+    const scalar hTol = 1e-3*hMin;
+
     forAll(spMeshPoints, linei)
     {
         DynamicList<label> line(16);
@@ -215,7 +232,7 @@ void Foam::sigmaColumns::findLines()
         {
             // Neighbouring point straight below
             label below = -1;
-            scalar bestRatio = GREAT;
+            scalar bestRatio = GREAT, bestOffset = GREAT, bestDz = 0;
 
             const labelList& pe = pEdges[pointi];
 
@@ -226,18 +243,20 @@ void Foam::sigmaColumns::findLines()
 
                 if (d.z() < 0)
                 {
-                    const scalar ratio =
-                        Foam::sqrt(sqr(d.x()) + sqr(d.y()))/(-d.z());
+                    const scalar offset = Foam::sqrt(sqr(d.x()) + sqr(d.y()));
+                    const scalar ratio = offset/(-d.z());
 
                     if (ratio < bestRatio)
                     {
                         bestRatio = ratio;
+                        bestOffset = offset;
+                        bestDz = -d.z();
                         below = pointj;
                     }
                 }
             }
 
-            if (below < 0 || bestRatio > 1e-6)
+            if (below < 0 || bestOffset > max(1e-6*bestDz, hTol))
             {
                 FatalErrorInFunction
                     << "Point " << pointi << " at " << pts[pointi]
@@ -601,7 +620,10 @@ Foam::label Foam::sigmaColumns::findNearestColumn
     {
         const scalar d = horizontalDistance(columnCentre_[coli], pt);
 
-        if (d < dist)
+        // Only a column closer by more than round-off replaces the first
+        // one: a point on a face between two columns keeps the same column
+        // in every run, also after a restart from rounded mesh points
+        if (nearest < 0 || d < dist*(1 - 1e-9) - 1e-14)
         {
             dist = d;
             nearest = coli;

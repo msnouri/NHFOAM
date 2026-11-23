@@ -124,7 +124,7 @@ void Foam::sigmaColumnPreconditioner::precondition
     const direction cmpt
 ) const
 {
-    if (fallback_.valid())
+    if (fallback_)
     {
         fallback_->precondition(wA, rA, cmpt);
         return;
@@ -165,7 +165,7 @@ void Foam::sigmaColumnPreconditioner::preconditionT
     const direction cmpt
 ) const
 {
-    if (fallback_.valid())
+    if (fallback_)
     {
         fallback_->preconditionT(wT, rT, cmpt);
         return;

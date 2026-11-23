@@ -28,16 +28,19 @@ The present version has
         column (line) preconditioner for the resulting matrix, and the
         cell-centred pressure of OpenFOAM as an alternative;
   \item a semi-implicit free surface with no gravity-wave Courant limit;
-  \item wave generation and absorption in relaxation zones;
+  \item wave generation and absorption in relaxation zones, or at a
+        boundary with active absorption;
   \item prescribed seabed motion (bottom uplift, rigid landslides);
   \item depth-induced breaking with the hydrostatic front approximation
         \citep{smit2013} and a breaking eddy viscosity with a breaking age
         \citep{kennedy2000};
   \item wetting and drying with a thin film on dry columns, after NHWAVE,
         with a conservative positivity limiter and upwind face depths;
-  \item linear or stream-function \citep{fenton1988} target waves,
+  \item linear, irregular (JONSWAP, directional) or stream-function
+        \citep{fenton1988} target waves with a return current,
         quadratic (constant, Manning or log-law) bottom friction, periodic
-        lateral boundaries and time-averaged output.
+        lateral boundaries, a stabilised $k$--$\omega$ closure
+        \citep{larsen2018}, exact restarts and time-averaged output.
 \end{itemize}
 
 This report documents the model and collects its verification and validation.
@@ -56,5 +59,9 @@ breaking solitary wave and spilling breakers in a surf zone.
 Section~\ref{sec:brk} adds the breaking age and eddy viscosity, tests them on
 two spilling-breaker beaches with the undertow, and runs the last test of
 \citet{ma2012}, the longshore current on a plane beach, in 3D with both
-models. Section~\ref{sec:conclusions} lists the limitations and the plans.
+models; it ends with the sensitivity to the breaking parameters and a
+stabilised $k$--$\omega$ closure. Section~\ref{sec:ext} tests the boundary
+wavemaker, active absorption, the return current and irregular waves,
+triangulated meshes, and the reproducibility of parallel and restarted
+runs. Section~\ref{sec:conclusions} lists the limitations and the plans.
 Appendix~\ref{app:usage} explains how to build the code and set up a case.

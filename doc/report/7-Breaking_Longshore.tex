@@ -34,7 +34,9 @@ the breaking model (Table~\ref{tab:brk-tk}, Figs.~\ref{fig:brk-tk} and
   \item the same with vertical mixing as well (\code{verticalMixing yes});
   \item eddy viscosity alone, with vertical mixing (the non-hydrostatic
         pressure kept in the breaking columns);
-  \item the default with the kinematic onset, $B_k = 0.85$.
+  \item the default with the kinematic onset, $B_k = 0.85$, with the crest
+        speed estimated by $\sqrt{gD}$ (the estimate from the front face,
+        \eqref{eq:crestspeed}, is tested in Section~\ref{sec:brk-sens}).
 \end{itemize}
 
 \begin{table}[!htbp]
@@ -42,8 +44,8 @@ the breaking model (Table~\ref{tab:brk-tk}, Figs.~\ref{fig:brk-tk} and
 \caption{Spilling breakers of \citet{ting1994}: wave height $H$ and mean
 water level $\bar\eta$ (cm), and the strongest undertow below the trough
 level relative to the measured one (mean over the stations at
-$x > 6.5$ m). Kinematic onset: $B_k = 0.85$; NHWAVE: $k$--$\epsilon$ with
-20 layers.}
+$x > 6.5$ m). Kinematic onset: $B_k = 0.85$, $C = \sqrt{gD}$; NHWAVE:
+$k$--$\epsilon$ with 20 layers.}
 \label{tab:brk-tk}
 \small
 \setlength{\tabcolsep}{4pt}
@@ -102,7 +104,7 @@ breaks 1.1 m late, at a height of 21 cm: with $\sqrt{gD}$ for the crest
 speed, the surface velocity reaches $0.85\sqrt{gD}$ only when the wave is
 about to overturn. Its smaller mean error inside the surf zone ($+3.1$ cm)
 hides the 8 cm overshoot at the breaking point; the criterion needs a better
-estimate of the crest speed, for instance from tracking the crests.
+estimate of the crest speed (Section~\ref{sec:brk-sens}).
 
 All variants keep the same main error, in the transition just after the
 breaking point. Between $x = 6.4$ and 8 m the measured height drops from 16.2
@@ -256,4 +258,173 @@ share; in \NHFOAM\ the slow decay of the heights after breaking also spreads
 the forcing over a wider surf zone. On this grid each model took about 70 min
 on one core (\NHFOAM: 48\,000 cells and 9800 steps; NHWAVE: 33\,600 cells);
 the finer grid would take several hours on the two cores used here and is
-left for a later run.
+left for a later run; \code{longshore.visser("ls\_fine", dx=0.0343, ny=128,
+nproc=8)} writes it with Ma et al.'s $280\times128$ cells, cut alongshore
+into strips for a parallel run.
+
+\subsection{Sensitivity to the breaking parameters}
+\label{sec:brk-sens}
+
+The parameters of the default model are those of \citet{smit2013} and
+\citet{kennedy2000}. Table~\ref{tab:brk-sens} varies them one at a time on
+both spilling-breaker beaches, around the default ($\alpha = 0.6$,
+$\beta = 0.3$, $\beta_F = 0.15$, $T_s = 5$, $\delta_b = 1.2$, horizontal
+mixing), and adds the fraction of $\nu_b$ that acts through the layer
+faces and the kinematic onset with the crest-speed estimate
+\eqref{eq:crestspeed}.
+
+\begin{table}[!htbp]
+\centering
+\caption{Sensitivity of the default breaking model (\code{hybrid}), one
+parameter at a time. Ting \& Kirby: largest wave height (cm) and where (m),
+mean error of $H$ for $x > 7$ m (cm), strongest undertow below the trough
+relative to the measured one. Hansen \& Svendsen: largest wave height and
+where, rms error of $H$ for $x > 8.3$ m (cm), rms error of the mean water
+level (mm). Kinematic onset with the crest speed \eqref{eq:crestspeed}.}
+\label{tab:brk-sens}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{\citet{ting1994}} & \multicolumn{3}{c}{\citet{hansen1979}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & largest $H$ & error $H$ & undertow & largest $H$ & rms $H$ & rms $\bar\eta$ \\
+\midrule
+lab & 16.5 (6.0) &  & 1 & 10.4 (8.2) &  &  \\
+default & 17.6 (6.2) & +3.5 & 1.32 & 10.1 (7.6) & 1.54 & 2.2 \\
+$\alpha = 0.5$ & 17.1 (6.1) & +3.5 & 1.36 & 10.1 (7.3) & 1.59 & 1.9 \\
+$\alpha = 0.7$ & 18.3 (6.4) & +3.5 & 1.31 & 9.9 (7.6) & 1.53 & 2.4 \\
+$\beta_F = 0.10$ & 17.5 (6.2) & +3.3 & 1.33 & 10.3 (7.6) & 1.42 & 2.2 \\
+$\beta_F = 0.20$ & 17.5 (6.2) & +3.7 & 1.34 & 9.9 (7.7) & 1.62 & 2.0 \\
+$\delta_b = 0.9$ & 17.6 (6.2) & +3.8 & 1.39 & 10.0 (7.7) & 1.83 & 2.0 \\
+$\delta_b = 1.5$ & 17.8 (6.2) & +3.3 & 1.29 & 10.2 (7.6) & 1.44 & 2.2 \\
+vertical mixing 0.1 & 17.6 (6.1) & +4.4 & 0.78 &  &  &  \\
+vertical mixing 0.3 & 17.5 (6.5) & +4.3 & 0.64 & 10.8 (7.9) & 2.08 & 2.0 \\
+vertical mixing 1 & 17.7 (6.3) & +4.4 & 0.65 &  &  &  \\
+kinematic, $B_k = 0.85$ & 20.2 (6.9) & +3.1 & 1.35 & 11.5 (7.8) & 1.37 & 3.5 \\
+kinematic, $B_k = 0.70$ & 17.3 (5.9) & +2.4 & 1.46 & 9.8 (7.5) & 1.42 & 3.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The breaking point and the surf-zone error hardly depend on the onset
+threshold: with $\alpha$ from 0.5 to 0.7 the largest height moves by 0.3 m
+and changes by 1.2 cm on the beach of \citet{ting1994}, but the mean error
+inside the surf zone stays at $+3.5$ cm, and on the beach of
+\citet{hansen1979} the rms error stays at 1.5--1.6 cm. A longer breaking
+event ($\beta_F = 0.10$) or a stronger eddy viscosity ($\delta_b = 1.5$)
+lowers the surf-zone errors on both beaches by 4--8\% ($+3.3$ cm and 1.42--1.44
+cm), and the opposite changes raise them by 5--19\%; the default sits near
+a shallow optimum. No parameter removes the main error,
+the slow loss of height just after the breaking point: the heights at
+$x = 8$ m stay between 12.8 and 13.4 cm (measured 9.3 cm). Vertical mixing
+changes the vertical structure rather than the dissipation: already a
+tenth of $\nu_b$ on the layer faces flattens the undertow to 0.78 of the
+measured strongest offshore velocity, with the smallest rms difference of
+the profiles (0.024 against 0.036), but it raises the surf-zone errors of
+the wave height by a quarter to a third on both beaches.
+
+The kinematic onset with the crest speed of \eqref{eq:crestspeed} breaks
+earlier than with $C = \sqrt{gD}$ (Table~\ref{tab:brk-tk}): 20.2 cm at
+$x = 6.9$ m instead of 21.1 cm at 7.1 m on the beach of \citet{ting1994},
+and 11.5 cm at 7.8 m on that of \citet{hansen1979} (measured 10.4 cm at
+8.2 m), where it has the smallest surf-zone error of all variants (1.37
+cm). With $B_k = 0.85$ it still breaks late on the steeper waves of
+\citet{ting1994}: the surface cell of a 10-layer column sits half a layer
+below the crest, where the velocity is smaller than at the crest, so the
+ratio that \citet{barthelemy2018} found at the crest is reached late.
+With $B_k = 0.70$ the waves of \citet{ting1994} break at the measured place
+(17.3 cm at 5.9 m, measured 16.5 cm at 6.0 m) and the surf-zone error falls
+to $+2.4$ cm, the smallest of all runs, although the heights at 8 m are
+still 2.7 cm too large and the undertow is 46\% too strong. On the beach of
+\citet{hansen1979} the same threshold breaks 0.7 m early (9.8 cm at 7.5 m),
+with a surf-zone error of 1.42 cm. Thresholds of 0.70 and 0.85 bracket the
+measured breaking points on both beaches: the kinematic onset with the
+crest-speed estimate and $B_k \approx 0.7$--0.8 is a promising alternative
+to the default, to be tested on more cases (and on the longshore current)
+before it becomes one.
+
+\subsection{A stabilised \texorpdfstring{$k$--$\omega$}{k-omega} closure}
+\label{sec:brk-kw}
+
+NHWAVE resolves the surf zone of \citet{ting1994} with 20 layers and a
+$k$--$\epsilon$ model (Table~\ref{tab:brk-tk}). \NHFOAM\ needs neither many
+layers nor a turbulence model with the HFA and the breaking eddy viscosity,
+but a two-equation closure gives the turbulence itself, and with it the
+vertical structure of the mixing. The stabilised $k$--$\omega$ model
+\eqref{eq:komegaLF} was therefore run on the same beach with 20 layers, a
+no-slip bottom with wall functions and no bottom stress term, first without
+a breaking model, then with the HFA (Table~\ref{tab:brk-kw},
+Figs.~\ref{fig:brk-kw} and~\ref{fig:brk-kw-tke}).
+
+\begin{table}[!htbp]
+\centering
+\caption{Ting \& Kirby's beach with the stabilised $k$--$\omega$ model: wave
+height $H$ and mean level $\bar\eta$ (cm), strongest undertow relative to the
+measured one, and the depth-mean of $(k/gh)^{1/2}$ below the trough at the
+first and last measuring stations ($x = 7.28$ and 9.72 m).}
+\label{tab:brk-kw}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccccc}
+\toprule
+ & largest $H$ & $H$, 8 m & $H$, 11 m & error of $H$ & $\bar\eta$, 11 m & undertow & $(k/gh)^{1/2}$ \\
+\midrule
+lab & 16.5, 6.0 m & 9.3 & 3.9 & & 1.4 & 1 & 0.038, 0.065 \\
+default, 10 layers & 17.6, 6.2 m & 12.9 & 6.6 & $+3.5$ & 0.8 & 1.32 & -- \\
+$k$--$\omega$, 20 layers & 23.9, 7.8 m & 22.6 & 12.0 & $+10.1$ & 0.7 & 0.85 & 0.031, 0.144 \\
+\quad $\lambda_2 = 0$ (unstabilised) & 23.4, 7.8 m & 22.5 & 7.9 & $+8.3$ & 0.8 & 0.78 & 0.051, 0.185 \\
+HFA + $k$--$\omega$, 10 layers & 17.2, 6.2 m & 15.5 & 9.8 & $+6.1$ & 0.5 & 1.21 & 0.023, 0.042 \\
+NHWAVE, $k$--$\epsilon$, 20 layers & 18.0, 6.9 m & 16.1 & 6.4 & $+4.8$ & 0.0 & 1.63 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{tk_komega.pdf}
+\caption{Spilling breakers \citep{ting1994} with the stabilised $k$--$\omega$
+model, without a breaking model (20 layers) and with the HFA (10 layers),
+against the default breaking model and NHWAVE.}
+\label{fig:brk-kw}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{tk_komega_tke.pdf}
+\caption{Spilling breakers \citep{ting1994}: time-mean turbulent kinetic
+energy of the $k$--$\omega$ runs at the measuring stations.}
+\label{fig:brk-kw-tke}
+\end{figure}
+
+Without a breaking model the waves do not break where they should. They
+keep steepening past the measured breaking point and reach 23.9 cm at
+$x = 7.8$ m (measured 16.5 cm at 6.0 m) before the crests collapse into
+bores: the non-hydrostatic pressure keeps the front from steepening, and
+neither the TVD convection nor the eddy viscosity of the closure, which
+only grows once the front is steep, takes enough energy out early. The
+turbulent kinetic energy at the first two stations after the measured
+breaking point is close to the measured one,
+$(k/gh)^{1/2} = 0.031$ and 0.062 against 0.038 and 0.065, but further
+inshore, under waves that are twice as high as the measured ones, it reaches
+0.08--0.14 against about 0.06. The undertow has about the measured strength
+(0.85 of the strongest measured offshore velocity) and the smallest rms
+difference of all runs (0.024 against 0.036 for the default breaking model).
+Without the stabilisation ($\lambda_2 = 0$, Wilcox's model) the turbulent
+kinetic energy is 30--60\% higher at every station, already 0.051 against
+0.038 at the first one: the over-production beneath nearly potential waves
+that \citet{larsen2018} describe. The extra mixing takes more energy out
+inside the surf zone (mean error $+8.3$ instead of $+10.1$ cm), but it does
+not move the breaking point.
+
+With the HFA the waves break at the right place (17.2 cm at 6.2 m), but the
+closure adds little dissipation behind the hydrostatic front: the
+surf-zone error is $+6.1$ cm, that of the HFA alone, and the turbulent
+kinetic energy is about half the measured one (0.023--0.043 against
+0.038--0.065). In \NHFOAM, therefore, the turbulence closure does not
+replace the breaking model: the dissipation of the bores comes from the
+breaking eddy viscosity, whose length scale $\delta_b D$ is that of the
+breaker, while the closure, resolved on 10--20 layers, sees too little
+shear in the hydrostatic bore. The closure is useful for the vertical
+structure: with it the undertow has the measured strength.
+

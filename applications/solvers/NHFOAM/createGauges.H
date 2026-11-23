@@ -32,9 +32,12 @@ forAll(gaugePoints, gaugei)
     const label coli = columns.findNearestColumn(gaugePoints[gaugei], dist);
     const scalar minDist = returnReduce(dist, minOp<scalar>());
 
+    // Ties (within round-off) go to the lowest processor
     label owner =
     (
-        (coli >= 0 && dist <= minDist) ? Pstream::myProcNo() : labelMax
+        (coli >= 0 && dist <= minDist*(1 + 1e-9) + 1e-14)
+      ? Pstream::myProcNo()
+      : labelMax
     );
     reduce(owner, minOp<label>());
 

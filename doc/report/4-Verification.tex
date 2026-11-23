@@ -201,7 +201,7 @@ case C, $|\Delta H|/H$ & 4.9\% & 4.7\% & 6.1\% & 5.1\% \\
 
 \begin{figure}[p]
 \centering
-\includegraphics[width=\textwidth]{bar_models_A.pdf}
+\includegraphics[width=0.9\textwidth]{bar_models_A.pdf}
 \caption{Submerged bar, case A, 10 layers: \NHFOAM\ (interface and cell-centred
 pressure), NHWAVE and REEF3D::NHFLOW against \citet{luth1994}.}
 \label{fig:barA}
@@ -209,7 +209,7 @@ pressure), NHWAVE and REEF3D::NHFLOW against \citet{luth1994}.}
 
 \begin{figure}[p]
 \centering
-\includegraphics[width=\textwidth]{bar_models_C.pdf}
+\includegraphics[width=0.92\textwidth]{bar_models_C.pdf}
 \caption{As Fig.~\ref{fig:barA}, case C.}
 \label{fig:barC}
 \end{figure}
@@ -230,8 +230,9 @@ water levels that vary by a few millimetres along the flume ($\pm2$ mm in
 when the wave train starts and when it crosses the bar, which the zones absorb
 only partly. Over the 0.1 m deep crest the current of such a wave shifts the
 waves by tenths of a second, so the rms error depends on the window
-(Table~\ref{tab:barwindow}), and so does the ranking. Volume-conserving
-wave-making zones and long-wave absorption would make long runs comparable.
+(Table~\ref{tab:barwindow}), and so does the ranking. The drift was later
+traced to the missing return current of the wave-making zone; with it, the
+runs are steady (Section~\ref{sec:bar-bc}).
 
 \begin{table}[ht]
 \centering
@@ -321,8 +322,8 @@ NHWAVE about $0.05\,t_0$ early. The trailing waves ($kh = 3$--5) now follow the
 measured phase, as NHWAVE's do; with the cell-centred pressure they fell
 further behind with every wave. Their amplitude is still too large: the third
 and fourth crests are up to 2--3 times the measured ones, while NHWAVE follows
-the measured decay. The wall that replaces \NHFOAM's beach also affects them
-after $t/t_0\approx1.5$.
+the measured decay. The wall that replaces \NHFOAM's beach is not the cause
+(Section~\ref{sec:ma-landslide}).
 
 \FloatBarrier
 \subsection{Breaking}

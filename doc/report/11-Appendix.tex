@@ -4,17 +4,23 @@
 \subsection{Building}
 
 \NHFOAM\ needs the ESI OpenFOAM line (\url{https://www.openfoam.com}). It was
-compiled and run with v1912, and every API call was checked against the v2512
-headers. With the OpenFOAM environment loaded, \code{./Allwmake} builds
+compiled and run with v1912, and the API calls were checked against the
+v2512 headers. With the OpenFOAM environment loaded, \code{./Allwmake} builds
 \begin{itemize}[nosep]
   \item \code{libNHFOAM}: the $\sigma$-column structure, mesh motion, the
         interface pressure matrix and the \code{sigmaColumn} preconditioner,
-        linear wave theory, relaxation zones, seabed motion and the
-        \code{nhMovingSlipVelocity} condition;
+        the wave theories (linear, irregular, stream function), relaxation
+        zones, seabed motion, and the boundary conditions
+        \code{nhMovingSlipVelocity} and \code{nhWaveVelocity};
+  \item \code{libNHFOAMturbulenceModels}: \code{kOmegaLF}, the
+        stabilised $k$--$\omega$ model of \citet{larsen2018};
   \item \code{NHFOAM}: the solver;
   \item \code{nhSetWaves}: initial conditions (\code{standing},
         \code{solitary}, \code{linear}, \code{circularMode}).
 \end{itemize}
+\code{validation/regression.py} runs a suite of short cases against stored
+references, and checks that a parallel run and a restarted run reproduce the
+serial, continuous one (Section~\ref{sec:robust}).
 
 \subsection{Mesh and fields}
 
@@ -35,11 +41,11 @@ entries (\code{\#includeEtc "caseDicts/setConstraintTypes"} in
 \caption{Boundary conditions of the fields in \code{0/}.}
 \label{tab:fields}
 \small
-\begin{tabular}{llll}
+\begin{tabular}{lllp{5.2cm}}
 \toprule
 field & \code{surface} & \code{bottom}, walls & notes \\
 \midrule
-\code{U} & \code{zeroGradient} & \code{slip} or \code{noSlip} & \code{nhMovingSlipVelocity} on a moving bottom \\
+\code{U} & \code{zeroGradient} & \code{slip} or \code{noSlip} & \code{nhMovingSlipVelocity} on a moving bottom, \code{nhWaveVelocity} for a wavemaker \\
 \code{p\_rgh} & \code{mixed} & \code{fixedFluxPressure} & the mixed coefficients are set by \NHFOAM \\
 \code{eta} & \code{zeroGradient} & \code{zeroGradient} & one value per column \\
 \bottomrule
@@ -70,9 +76,14 @@ forcingZones
         sigmaMax    20;  exponent 2;
         waveHeight  0.02;  wavePeriod 2.02;  depth 0.4;
         direction   (1 0 0);  rampTime 4.04;
+        // returnCurrent no;       // default yes (linear, irregular)
         // theory streamFunction;  waveNumber ...;  uMean ...;
         // etaCoeffs (...);  psiCoeffs (...);   from
         // validation/stream_function.py H T h [N]
+        // theory irregular;  Hs 0.03;  Tp 1.5;  gamma 3.3;
+        // nFrequencies 100;  seed 1;  nDirections 1;  spreading 10;
+        // maxAngle 60;  periodicWidth 5.6;
+        // components ((a T angle phase) ...);  // instead of JONSWAP
     }
     outlet
     {
@@ -86,10 +97,11 @@ forcingZones
 breaking
 {
     model       hybrid;       // HFA | eddyViscosity | hybrid | none
-    onset       etaT;         // etaT | kinematic (|u_s| > Bkin sqrt(gD))
-    alpha       0.6;  beta 0.3;  Bkin 0.85;
+    onset       etaT;         // etaT | kinematic (u_s.n > Bkin C)
+    alpha       0.6;  beta 0.3;  Bkin 0.85;  crestSlope 0.01;
     betaFinal   0.15; Tstar 5;   // threshold falling with the breaking age
-    delta       1.2;  verticalMixing no;    // eddy viscosity
+    delta       1.2;  verticalMixing 0;     // eddy viscosity; fraction of
+                                            // nu_b on the layer faces
     hydrostaticFactor 1000;
 }
 
@@ -113,6 +125,26 @@ bottomMotion                  // uplift, or slide (see the source)
     amplitude 0.0005;  history exponential;  riseTime 0.1;
 }
 \end{verbatim}
+
+\subsection{Boundary wavemaker and turbulence}
+
+A side patch makes waves (and absorbs those coming back) with
+\begin{verbatim}
+inlet                         // 0/U
+{
+    type               nhWaveVelocity;
+    activeAbsorption   yes;
+    absorptionCelerity shallow;   // shallow | wave | value [m/s]
+    wave { theory linear; waveHeight 0.041; wavePeriod 1.01; depth 0.4;
+           direction (1 0 0); rampTime 2.02; }
+    value              uniform (0 0 0);
+}
+\end{verbatim}
+with \code{fixedFluxPressure} for \code{p\_rgh} and \code{zeroGradient} for
+\code{eta}; \code{waveHeight 0} gives an absorbing boundary. The stabilised
+$k$--$\omega$ model is selected in \code{turbulenceProperties} with
+\code{simulationType RAS; RAS \{ RASModel kOmegaLF; \}} and needs the fields
+\code{k}, \code{omega} and \code{nut} (wall functions on a no-slip bottom).
 
 \subsection{Schemes and solution controls}
 
@@ -171,11 +203,22 @@ structuredCoeffs
 
 The tutorials are \code{standingWave}, \code{solitaryWave},
 \code{submergedBar}, \code{circularBasin} (3D unstructured prisms),
-\code{bottomUplift}, \code{landslide3D}, \code{breakingSlope} and
+\code{bottomUplift}, \code{landslide3D}, \code{breakingSlope},
 \code{beachRunup} (the solitary wave of Section~\ref{sec:wd-runup}, with
-wetting and drying). Each runs with \code{./Allrun}. The folder
-\code{validation/} holds the scripts that build the validation cases
-(\code{make\_case.py}, \code{ma2012.py}, \code{wetdry.py} for the wetting and
-drying tests, \code{other\_models.py} for the NHWAVE and REEF3D::NHFLOW input,
-\code{stream\_function.py} for nonlinear waves) and make the figures of this
-report (\code{make\_figures.sh}).
+wetting and drying), \code{longshoreCurrent} (Section~\ref{sec:brk-ls}) and
+\code{irregularWaves} (JONSWAP waves from the boundary wavemaker, an absorbing
+boundary at the other end, no relaxation zones). Each runs with
+\code{./Allrun}. The folder \code{validation/} holds the scripts that build
+the validation cases and make the figures of this report:
+\begin{itemize}[nosep]
+  \item \code{make\_case.py}, \code{ma2012.py}: the cases of
+        Sections~\ref{sec:verification} and~\ref{sec:ma2012};
+  \item \code{wetdry.py}, \code{longshore.py}: wetting and drying, breaking
+        and the longshore current;
+  \item \code{wavemaker.py}, \code{unstructured.py}: the tests of
+        Section~\ref{sec:ext} (the latter with gmsh);
+  \item \code{other\_models.py}: the input of NHWAVE and REEF3D::NHFLOW;
+  \item \code{stream\_function.py}: the coefficients of nonlinear waves;
+  \item \code{regression.py}: the regression suite;
+  \item \code{make\_figures.sh}: the figures.
+\end{itemize}
