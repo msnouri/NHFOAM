@@ -993,3 +993,52 @@ if (wetDry.active() && Pstream::master())
     shorelineFilePtr()
         << "# time  wetColumns  maxWetBed  maxEtaOnLand" << endl;
 }
+
+// Highest free surface of each column over the time steps in which it is wet
+// (maximum inundation, run-up), written as the field etaMax:
+//     etaMax yes;
+// Columns that were never wet keep their bed elevation, so etaMax - z_b > 0
+// marks the flooded area.  A restart continues the record.
+const bool etaMaxOn(nhProperties.getOrDefault<Switch>("etaMax", false));
+autoPtr<volScalarField> etaMaxPtr;
+scalarField etaMaxCol;
+
+if (etaMaxOn)
+{
+    etaMaxPtr.reset
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "etaMax",
+                runTime.timeName(),
+                mesh,
+                IOobject::READ_IF_PRESENT,
+                IOobject::AUTO_WRITE
+            ),
+            mesh,
+            dimensionedScalar("etaMax", dimLength, -GREAT),
+            zeroGradientFvPatchScalarField::typeName
+        )
+    );
+
+    scalarField start(etaCol);
+    if (wetDry.active())
+    {
+        const boolList& wet = wetDry.colWet();
+        const scalarField& zb = columns.columnBottomZ();
+        forAll(start, coli)
+        {
+            if (!wet[coli])
+            {
+                start[coli] = zb[coli];
+            }
+        }
+    }
+    etaMaxCol = max(columns.columnValues(etaMaxPtr->primitiveField()), start);
+    columns.setCellValues(etaMaxCol, etaMaxPtr->primitiveFieldRef());
+    etaMaxPtr->correctBoundaryConditions();
+
+    Info<< "Recording the highest free surface (etaMax)" << nl << endl;
+}

@@ -438,6 +438,10 @@ averaging                    // time averages UMean and etaMean, written
     timeStart   95;
 }
 
+etaMax          yes;         // highest free surface of each column while it
+                             // is wet, written as the field etaMax (columns
+                             // never wet keep their bed): inundation, run-up
+
 wettingDrying                // moving shorelines (pressureLocation interface)
 {
     minDepth         0.005;  // film of the dry columns [m]
@@ -1125,6 +1129,7 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | 4.6 3D rigid landslide, d = 61 mm | Enet & Grilli (2007) | 6.5 (and 5.5) |
 | 4.7 longshore current on a plane beach | Visser (1991) | 6.8 |
 | (NHWAVE example) surf zone | Ting & Kirby (1994) | 6.6, 6.7 |
+| (NHWAVE example, NTHMP 6) solitary waves on a conical island | Briggs et al. (1995) | 6.9 |
 
 Three of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, the solitary wave that
@@ -1506,9 +1511,93 @@ the likely main cause of the deficit both models share here.
 
 ![longshore current](doc/figures/longshore.png)
 
+### 6.9 Solitary waves on a conical island (NTHMP benchmark 6)
+
+![conical island gauges](doc/figures/conical_island_gauges.png)
+
+![conical island run-up](doc/figures/conical_island_runup.png)
+
+Briggs et al. (1995) sent solitary waves of H/d = 0.045, 0.091 and 0.181
+(cases A, B, C; d = 0.32 m) against a conical island: toe radius 3.6 m, crest
+radius 1.1 m, 1:4 faces. They recorded the water level in front of the island
+(gauges 1–4), on its front face (6, 9), on its side (16) and behind it (22),
+and the run-up all round. It is benchmark 6 of the NTHMP and one of NHWAVE's
+examples (`inundation_benchmarks/Solitary_wave_on_a_conical_island`), and the
+first test of wetting and drying in 3D here. `validation/conical_island.py`
+writes both models' cases, `plot_conical_island.py` makes the figures.
+
+Both models use the settings of NHWAVE's example: 3 layers, Cd = 0.01, a
+5 mm film, NHWAVE with its k–ε model and NHFOAM with the hybrid breaking
+model. To keep the cost down they cover half the basin, cut along the line
+through the island's centre (a slip wall, so gauges 1 and 2 are the mirror
+images of 4 and 3), and start from the exact solitary wave with
+η = H/20 at the incident gauges instead of NHWAVE's boundary wavemaker; the
+basin ends in a 2 m sponge. Each run is shifted in time so that its crest
+meets the measured one at the incident gauges, and each lab record starts
+from its mean before the wave. The run-up is the highest water level of the
+cells on the edge of the flooded area, in 5° sectors (NHFOAM's new `etaMax`
+field, NHWAVE's `hmax`), as NHWAVE's own script for this benchmark does.
+NHWAVE's runs are on the 10 cm grid only: on its own 5 cm grid one case
+would take about 5 h here, because its time step follows the vertical
+Courant number of its thinnest layers and falls to about 0.01 s in the thin
+water on the island.
+
+Errors of the highest crest at the gauges, run-up R/d in front of (270°) and
+behind (90°) the island, rms error of the run-up over the measured points,
+and run time on 2 cores:
+
+| case | run | gauge 6 | gauge 9 | gauge 16 | gauge 22 | R/d front | R/d back | rms R/d | time |
+|---|---|---|---|---|---|---|---|---|---|
+| A | lab | | | | | 0.100 | 0.070 | | |
+| A | NHFOAM, 5 cm | +15% | +19% | +1% | +25% | 0.112 | 0.081 | 0.018 | 76 min |
+| A | NHFOAM, 10 cm | +15% | +21% | +3% | +13% | 0.104 | 0.087 | 0.014 | 7 min |
+| A | NHWAVE, 10 cm | +12% | +20% | +3% | +18% | 0.107 | 0.089 | 0.016 | 22 min |
+| B | lab | | | | | 0.230 | 0.269 | | |
+| B | NHFOAM, 5 cm | +8% | +14% | +7% | +15% | 0.238 | 0.215 | 0.024 | 58 min |
+| B | NHFOAM, 10 cm | +8% | +16% | +9% | +7% | 0.220 | 0.188 | 0.039 | 5 min |
+| B | NHWAVE, 10 cm | +6% | +11% | +8% | +19% | 0.229 | 0.205 | 0.032 | 21 min |
+| C | lab | | | | | 0.547 | 0.341 | | |
+| C | NHFOAM, 5 cm | +4% | +22% | +8% | +28% | 0.473 | 0.301 | 0.052 | 42 min |
+| C | NHFOAM, 10 cm | +3% | +18% | +12% | +13% | 0.422 | 0.285 | 0.070 | 4 min |
+| C | NHWAVE, 10 cm | +1% | +14% | +12% | −2% | 0.454 | 0.291 | 0.067 | 27 min |
+
+- **NHFOAM and NHWAVE on the same grid** agree closely: the crests at the
+  incident gauges and gauges 6, 9 and 16 within 4% of each other, the
+  run-up within 0.01 d in case A and within 0.02 d on average in cases B and
+  C. They differ most behind the island, where the two fronts that wrapped
+  round it collide: at gauge 22 NHWAVE's crest is 5% and 11% higher than
+  NHFOAM's in cases A and B, and 13% lower in case C, where the waves break
+  and NHWAVE's crest is the closer to the measured one (NHFOAM's also comes
+  0.3 s late); on the flanks of the run-up peak behind the island
+  (75°–105°) the run-up differs by up to 0.08 d. Without its breaking model
+  NHFOAM gives the same crest at gauge 22 (10.4 cm against 10.3 cm) and the
+  same run-up: its breaking model hardly acts in the collision.
+- **Against the measurements** both models overshoot on the island's face
+  (gauge 9, 11–22%) and behind it in the smaller waves (gauge 22, 7–25% in
+  cases A and B), as do the FUNWAVE results that come with NHWAVE's example
+  (gauge 9: 17–25%, gauge 22: 47% in case A, 31% in B). The run-up has the
+  measured shape: highest in front, lowest at the sides, a peak behind the
+  island where the fronts meet. In cases A and C the measured minima at
+  45°–135° are deeper than both models give; in case B the models follow
+  them but stay below the measured peak behind the island (0.28 d against
+  0.19–0.22 d). In case C both stay below the measured front run-up of
+  0.55 d (0.42–0.45 d on the 10 cm grid, 0.47 d on 5 cm). After the crests
+  the measured troughs are deeper than both models give (case A: −0.9 cm
+  against −0.4 cm at the incident gauges, −1.1 cm against −0.6 to −0.7 cm
+  at gauge 6). The measured records also sit about 1 mm below the
+  still-water level after the incident crest, so part of this probably
+  comes from the paddle's wave, which was not an exact solitary wave.
+- **The 5 cm grid** brings NHFOAM's run-up closer to the measurements in
+  cases B and C (rms 0.039 → 0.024 and 0.070 → 0.052) and changes the gauges
+  by a few per cent, except gauge 22, whose crests rise further above the
+  measured ones (case A: +13% → +25%, case C: +13% → +28%).
+- **Cost:** on the same grid NHFOAM was 3–6 times faster than NHWAVE
+  (4–7 min against 21–27 min).
+
 ## 7. Limitations (this version)
 
-- **Wetting and drying** has been tested in 2DV and on triangulated strips.
+- **Wetting and drying** has been tested in 2DV, on triangulated strips and
+  around a conical island (6.9).
   The film acts as a wet bed (in NHWAVE too), so thin swash flows run slower
   than over a truly dry bed, and puddles of a few millimetres above the film
   stay on the beach in the backwash; on triangles the run-up is 8% lower
@@ -1563,7 +1652,9 @@ vertical mixing, the stabilised k–ω closure and the sensitivity study
 (6.7); the boundary wavemaker with active absorption, the return current
 and irregular waves (5.7); triangulated meshes with breaking, wetting and
 drying and diffraction (5.8); the landslide with its beach (6.5); and the
-regression suite (5.9).
+regression suite (5.9). Then the record of the highest water level
+(`etaMax`) and the solitary waves on a conical island, the first 3D test of
+wetting and drying (6.9).
 
 Next:
 
@@ -1667,6 +1758,9 @@ Next:
 - MacCamy, R.C., Fuchs, R.A. (1954). Wave forces on piles: a diffraction
   theory. Technical Memorandum 69, Beach Erosion Board, US Army Corps of
   Engineers.
+- Briggs, M.J., Synolakis, C.E., Harkins, G.S., Green, D.R. (1995). Laboratory
+  experiments of tsunami runup on a circular island. *Pure and Applied
+  Geophysics* 144, 569–593.
 
 ## License
 

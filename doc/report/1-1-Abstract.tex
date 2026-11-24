@@ -58,8 +58,12 @@ input. The return current removes the slow drift of long runs over the
 submerged bar, after which \NHFOAM's errors there are steady and its phase
 agrees with that of NHWAVE and REEF3D::NHFLOW. On triangulated meshes the
 breaking solitary wave runs up to $R/d = 0.49$ and the waves diffracted by
-a vertical cylinder are within 7\% of linear theory. Restarts are exact,
-parallel runs reproduce serial ones with breakers across processor
+a vertical cylinder are within 7\% of linear theory. Around the conical
+island of \citet{briggs1995}, the first three-dimensional test of wetting and
+drying, \NHFOAM\ and NHWAVE on the same grid agree to within 4\% at most
+gauges and to $0.02d$ on average in the run-up, and both reproduce the shape
+of the measured run-up around the island; \NHFOAM\ was 3 to 6 times faster. Restarts are
+exact, parallel runs reproduce serial ones with breakers across processor
 boundaries, and a regression suite guards both.
 
 \vspace{0.5em}

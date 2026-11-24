@@ -8,8 +8,9 @@ drying of \NHFOAM, which follows NHWAVE's mask and thin film
 surface and the collocated mesh, compares the two treatments, and tests them:
 still water against a dry beach, the oscillation in a parabolic basin of
 \citet{thacker1981} and a dam break on a dry bed (verification), and the
-run-up of a breaking solitary wave \citep{synolakis1987} and the spilling
-breakers of \citet{ting1994} (validation, with NHWAVE).
+run-up of a breaking solitary wave \citep{synolakis1987}, the solitary waves
+on a conical island of \citet{briggs1995} and the spilling breakers of
+\citet{ting1994} (validation, with NHWAVE).
 
 \subsection{Method}
 \label{sec:wd-method}
@@ -269,6 +270,119 @@ overshot to $R/d = 0.66$: a film with that velocity floods the next column in
 the next step, and it ran away to the end of the beach. The upwind face
 depth, the supercritical flux and the rules for opened faces and puddles
 removed both problems.
+
+\subsection{Solitary waves on a conical island}
+\label{sec:wd-island}
+
+\citet{briggs1995} sent solitary waves of $H/d = 0.045$, 0.091 and 0.181
+(cases A, B, C; $d = 0.32$ m) against a conical island with a toe radius of
+3.6 m, a crest radius of 1.1 m and 1:4 faces, and recorded the water level in
+front of the island (gauges 1--4), on its front face (6, 9), on its side (16)
+and behind it (22), and the run-up all round \citep[see also][]{liu1995}. It
+is benchmark 6 of the NTHMP \citep{synolakis2008}, one of NHWAVE's examples
+(\code{Solitary\_wave\_on\_a\_conical\_island}) and the first test of wetting
+and drying in three dimensions here.
+
+Both models use the settings of NHWAVE's example: 3 layers, $C_d = 0.01$, a
+5 mm film, NHWAVE with its $k$--$\varepsilon$ model and \NHFOAM\ with the
+hybrid breaking model of Section~\ref{sec:brk}. To keep the cost down they
+cover half the basin, cut along the line through the centre of the island (a
+slip wall, so that gauges 1 and 2 are the mirror images of 4 and 3), and start
+from the exact solitary wave with $\eta = H/20$ at the incident gauges, as in
+Section~\ref{sec:wd-runup}, instead of NHWAVE's boundary wavemaker. The basin
+ends in a 2 m sponge. Each run is shifted in time so that its crest meets the
+measured one at the incident gauges, and each measured record starts from its
+mean before the wave. The run-up is the highest water level of the cells on
+the edge of the flooded area, in sectors of $5^\circ$: \NHFOAM\ records it in
+the new field \code{etaMax}, NHWAVE in \code{hmax}, and NHWAVE's own script
+for this benchmark uses the same cells. NHWAVE's runs are on the 10 cm grid
+only. On its own 5 cm grid one case would take about 5 h here, because its
+time step follows the vertical Courant number of its thinnest layers and falls
+to about 0.01 s in the thin water on the island.
+
+On the same grid the two models agree closely (Figs.~\ref{fig:wd-island} and
+\ref{fig:wd-island-runup}, Table~\ref{tab:wd-island}): the crests at the
+incident gauges and at gauges 6, 9 and 16 within 4\% of each other, the run-up
+within $0.01d$ in case A and within $0.02d$ on average in cases B and C. They
+differ most behind the island, where the two fronts that wrapped round it
+collide. At gauge 22 NHWAVE's crest is 5\% and 11\% higher than \NHFOAM's in
+cases A and B, and 13\% lower in case C, where the waves break and NHWAVE's
+crest is the closer to the measured one; \NHFOAM's also comes 0.3 s late. On
+the flanks of the run-up peak behind the island ($75^\circ$--$105^\circ$) the
+run-up differs by up to $0.08d$. Without its breaking model \NHFOAM\ gives the
+same crest at gauge 22 (10.4 cm against 10.3 cm) and the same run-up, so its
+breaking model hardly acts in the collision.
+
+Against the measurements both models overshoot on the island's face (gauge 9,
+11--22\%) and behind it in the smaller waves (gauge 22, 7--25\% in cases A and
+B), as do the FUNWAVE results that come with NHWAVE's example (gauge 9: 17--25\%,
+gauge 22: 47\% in case A and 31\% in B). The run-up has the measured shape:
+highest in front, lowest at the sides, with a peak behind the island where the
+fronts meet. In cases A and C the measured minima at $45^\circ$--$135^\circ$
+are deeper than either model gives; in case B the models follow them but stay
+below the measured peak behind the island ($0.28d$ against 0.19--$0.22d$). In
+case C both stay below the measured front run-up of $0.55d$: 0.42--$0.45d$ on
+the 10 cm grid and $0.47d$ for \NHFOAM\ on the 5 cm grid. After the crests the
+measured troughs are deeper than both models give (case A: $-0.9$ cm against
+$-0.4$ cm at the incident gauges, $-1.1$ cm against $-0.6$ to $-0.7$ cm at
+gauge 6). The measured records also sit about 1 mm below the still-water level
+after the incident crest, so part of this probably comes from the paddle's
+wave, which was not an exact solitary wave.
+
+Refining \NHFOAM's grid from 10 to 5 cm brings the run-up closer to the
+measurements in cases B and C (rms error 0.039 to $0.024d$ and 0.070 to
+$0.052d$) and changes the gauges by a few per cent, except gauge 22, whose
+crests rise further above the measured ones (case A: from 13 to 25\%, case C:
+from 13 to 28\%). On the same grid \NHFOAM\ ran 3 to 6 times faster than
+NHWAVE.
+
+\begin{table}[htbp]
+\centering
+\caption{Conical island: error of the highest crest at the gauges, run-up
+$R/d$ in front of ($270^\circ$) and behind ($90^\circ$) the island, rms error
+of the run-up over the measured points, and run time on 2 cores.}
+\label{tab:wd-island}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrrrr}
+\toprule
+case & run & g6 & g9 & g16 & g22 & $R/d$ front & $R/d$ back & rms $R/d$ & time \\
+\midrule
+A & lab & & & & & 0.100 & 0.070 & & \\
+  & \NHFOAM, 5 cm & +15\% & +19\% & +1\% & +25\% & 0.112 & 0.081 & 0.018 & 76 min \\
+  & \NHFOAM, 10 cm & +15\% & +21\% & +3\% & +13\% & 0.104 & 0.087 & 0.014 & 7 min \\
+  & NHWAVE, 10 cm & +12\% & +20\% & +3\% & +18\% & 0.107 & 0.089 & 0.016 & 22 min \\
+\midrule
+B & lab & & & & & 0.230 & 0.269 & & \\
+  & \NHFOAM, 5 cm & +8\% & +14\% & +7\% & +15\% & 0.238 & 0.215 & 0.024 & 58 min \\
+  & \NHFOAM, 10 cm & +8\% & +16\% & +9\% & +7\% & 0.220 & 0.188 & 0.039 & 5 min \\
+  & NHWAVE, 10 cm & +6\% & +11\% & +8\% & +19\% & 0.229 & 0.205 & 0.032 & 21 min \\
+\midrule
+C & lab & & & & & 0.547 & 0.341 & & \\
+  & \NHFOAM, 5 cm & +4\% & +22\% & +8\% & +28\% & 0.473 & 0.301 & 0.052 & 42 min \\
+  & \NHFOAM, 10 cm & +3\% & +18\% & +12\% & +13\% & 0.422 & 0.285 & 0.070 & 4 min \\
+  & NHWAVE, 10 cm & +1\% & +14\% & +12\% & $-2$\% & 0.454 & 0.291 & 0.067 & 27 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{conical_island_gauges.pdf}
+\caption{Solitary waves on a conical island: water level at the gauges against
+the measurements of \citet{briggs1995}. The first column shows lab gauges 2
+(solid) and 3 (dotted); the model gauge sits at gauge 3, the mirror image of
+gauge 2.}
+\label{fig:wd-island}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{conical_island_runup.pdf}
+\caption{Solitary waves on a conical island: run-up around the island
+($0^\circ$ at gauge 16, $90^\circ$ behind the island, $270^\circ$ in front).}
+\label{fig:wd-island-runup}
+\end{figure}
 
 \subsection{Spilling breakers on a 1:35 beach}
 \label{sec:wd-tk}

@@ -106,6 +106,32 @@
         }
     }
 
+    // Highest free surface while wet (createFields.H)
+    if (etaMaxOn)
+    {
+        if (wetDry.active())
+        {
+            const boolList& wet = wetDry.colWet();
+            forAll(etaMaxCol, coli)
+            {
+                if (wet[coli])
+                {
+                    etaMaxCol[coli] = max(etaMaxCol[coli], etaCol[coli]);
+                }
+            }
+        }
+        else
+        {
+            etaMaxCol = max(etaMaxCol, etaCol);
+        }
+
+        if (runTime.writeTime())
+        {
+            columns.setCellValues(etaMaxCol, etaMaxPtr->primitiveFieldRef());
+            etaMaxPtr->correctBoundaryConditions();
+        }
+    }
+
     // Wave gauges
     if (gaugePoints.size())
     {

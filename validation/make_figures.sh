@@ -23,6 +23,7 @@
 #   UN   : unstructured meshes (unstructured.py: strip, strip_ref, cyl)
 #   BAR2 : submerged bar with the boundary wavemaker (make_case.bar_case)
 #   LS   : the landslide with its beach (make_case.enet_grilli_case)
+#   CI   : the conical island (conical_island.py <dir>: nf_A_05 ... nw_C_10)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -40,6 +41,7 @@ WM=${WM:-/home/claude/runs_wm}
 UN=${UN:-/home/claude/runs_un}
 BAR2=${BAR2:-/home/claude/runs_bar2}
 LS=${LS:-/home/claude/runs_ls}
+CI=${CI:-/home/claude/runs_ci}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -174,3 +176,13 @@ python3 plot_undertow.py $TK5 $OUT/tk_komega_undertow.png \
     $KW/tk_kwhfa10:"HFA + \$k\$--\$\\omega\$" nhwave:$WD/tk/nw_tk:NHWAVE
 python3 plot_tke.py $TK7 $OUT/tk_komega_tke.png $KW/tk_kw20:"\$k\$--\$\\omega\$, 20 layers" \
     $KW/tk_kwl0:"\$\\lambda_2 = 0\$, 20 layers" $KW/tk_kwhfa10:"HFA + \$k\$--\$\\omega\$, 10 layers"
+
+# Solitary waves on a conical island (NTHMP benchmark 6)
+CIR=()
+for c in A B C; do
+    CIR+=("$c:nhfoam:$CI/nf_${c}_05:0.05:NHFOAM, 5 cm"
+          "$c:nhfoam:$CI/nf_${c}_10:0.1:NHFOAM, 10 cm"
+          "$c:nhwave:$CI/nw_${c}_10:0.1:NHWAVE, 10 cm")
+done
+python3 plot_conical_island.py $OUT/conical_island_gauges.png \
+    $OUT/conical_island_runup.png "${CIR[@]}"

@@ -43,7 +43,11 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         bed showed that both models treat the film as a wet bed and follow
         Stoker's solution for it, not Ritter's. Parallel runs give the same
         run-up with a processor boundary in the swash zone (0.540 against
-        0.531).
+        0.531). Around the conical island of \citet{briggs1995} the two
+        models on the same grid agree to within 4\% at most gauges and to
+        $0.02d$ on average in the run-up; both overshoot on the island's
+        face and, in the smaller waves, behind it, as FUNWAVE does, and
+        \NHFOAM\ ran 3 to 6 times faster.
   \item \textbf{Breaking.} The HFA alone flags only the fronts of the
         bores. A persistence threshold that falls with the age of the
         breaking event and the breaking eddy viscosity of
@@ -107,8 +111,8 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 
 \paragraph{Limitations.}
 \begin{itemize}[nosep]
-  \item \textbf{Wetting and drying} has been tested in 2DV and on
-        triangulated strips. The film acts as a wet bed, so thin swash flows
+  \item \textbf{Wetting and drying} has been tested in 2DV, on
+        triangulated strips and around a conical island. The film acts as a wet bed, so thin swash flows
         run slower than over a truly dry bed (in NHWAVE as well), and
         puddles of a few millimetres above the film stay on the beach in
         the backwash; on triangles the run-up is 8\% lower than on the
