@@ -1,0 +1,63 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | NHFOAM
+   \\    /   O peration     |
+    \\  /    A nd           |
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    surface
+    {
+        type            zeroGradient;
+    }
+    bottom
+    {
+        type            slip;
+    }
+    left
+    {
+        type            nhWaveVelocity;
+        activeAbsorption yes;
+        wave
+        {
+            theory      timeSeries;
+            depth       0.218;
+            direction   (1 0 0);
+            eta                         // the record: any Function1 of time
+            {
+                type    tableFile;
+                file    "$FOAM_CASE/constant/record.dat";
+            }
+            celerity    1.6674;         // sqrt(g (h + H)) for a single pulse;
+                                        // default sqrt(g (h + eta))
+            // timeShift 0;             // record time = t + timeShift
+            // scale     1;             // factor on the record
+        }
+        value           uniform (0 0 0);
+    }
+    right
+    {
+        type            slip;
+    }
+    frontAndBack
+    {
+        type            empty;
+    }
+}
+
+// ************************************************************************* //

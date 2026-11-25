@@ -140,6 +140,29 @@ $c_a = \sqrt{gh}$ (shallow water) or the phase speed of the target wave,
 which matches the depth-averaged velocity $c\,\eta/h$ of a linear wave of
 that period. With zero wave height the patch is an absorbing boundary.
 
+The target can also be a measured record (\code{theory timeSeries}): the
+surface elevation $\eta_r(t)$ of a wave gauge, or the displacement $X(t)$ of a
+piston paddle, given as any \code{Function1} of time (a table read from a
+file, linearly interpolated). The velocity is uniform over the depth, as in
+a long wave,
+\begin{equation}
+  u_t = \frac{c\,\eta_r}{h + \eta_r},\qquad
+  w_t = \frac{z_b}{c}\,\frac{\mathrm{d}u_t}{\mathrm{d}t},
+  \label{eq:timeseries}
+\end{equation}
+with $c = \sqrt{g(h+\eta_r)}$, the relation of the NTHMP benchmarks
+\citep{synolakis2008}, or a given celerity; for a wave of permanent form
+travelling at $c$, $u_t$ is the exact depth-averaged velocity (mass
+conservation, $u\,(h+\eta) = c\,\eta$), and $w_t$ follows from continuity.
+A paddle record gives $u_t = \mathrm{d}X/\mathrm{d}t$, and $\eta_t$ from the
+inverse of the same relation for the absorption \eqref{eq:absorb}; the
+paddle stays at its rest position, which suits strokes that are small
+against the distances to the gauges. The time derivatives are central
+differences over half the sampling interval of the record. In a relaxation
+zone the record arrives after the long-wave travel time
+$(\bm{x}-\bm{x}_0)\cdot\bm{e}/\sqrt{gh}$ from the point $\bm{x}_0$ where it
+was measured.
+
 \subsection{Seabed motion}
 \label{sec:bottommotion}
 

@@ -222,7 +222,7 @@ void Foam::nhWaveVelocityFvPatchVectorField::updateCoeffs()
         scalar c = Foam::sqrt(gMag_*h);
         if (absorptionMode_ == "wave")
         {
-            c = w.omega()/w.k();
+            c = w.phaseSpeed();
         }
         else if (absorptionMode_ == "value")
         {

@@ -18,7 +18,8 @@ function objects.
 > eddy viscosity with a breaking age), wetting and drying (moving
 > shorelines, run-up) after NHWAVE, wave generation in relaxation zones or
 > by a boundary wavemaker with active absorption (regular, stream-function
-> and irregular/directional waves, with a return current), a stabilised
+> and irregular/directional waves, with a return current, or measured gauge
+> and paddle records), a stabilised
 > k–ω closure, periodic (cyclic) lateral boundaries, exact restarts and
 > wave-averaged output. See *Limitations* and *Roadmap* below.
 >
@@ -283,7 +284,7 @@ This builds:
 
 | target | what |
 |---|---|
-| `libNHFOAM` | σ-column structure, mesh motion, the interface pressure matrix and the `sigmaColumn` preconditioner, wave theories (linear, irregular, stream function), relaxation zones, seabed motion, the conditions `nhMovingSlipVelocity` and `nhWaveVelocity` (boundary wavemaker) |
+| `libNHFOAM` | σ-column structure, mesh motion, the interface pressure matrix and the `sigmaColumn` preconditioner, wave theories (linear, irregular, stream function, measured time series), relaxation zones, seabed motion, the conditions `nhMovingSlipVelocity` and `nhWaveVelocity` (boundary wavemaker) |
 | `libNHFOAMturbulenceModels` | `kOmegaLF`: k–ω (Wilcox 2006) with the stabilisation of Larsen & Fuhrman (2018) |
 | `NHFOAM` | the solver |
 | `nhSetWaves` | initial conditions: `standing`, `solitary`, `linear`, `circularMode` |
@@ -294,11 +295,12 @@ versions are used (the turbulence model follows the v1912 template of
 OpenFOAM's `kOmega`; its headers were not available to check). `./Allwclean`
 removes the build.
 
-*Tests.* `validation/regression.py <workDir>` runs ten short cases (about
+*Tests.* `validation/regression.py <workDir>` runs twelve short cases (about
 3 minutes on one core: standing and solitary waves, the boundary wavemaker
-with regular and irregular waves, a dam break and the run-up with wetting
-and drying, breaking on Ting & Kirby's beach, the k–ω model, a bottom
-uplift and a triangulated beach) and compares their gauge records with the
+with regular and irregular waves and with measured elevation and paddle
+records, a dam break and the run-up with wetting and drying, breaking on
+Ting & Kirby's beach, the k–ω model, a bottom uplift and a triangulated
+beach) and compares their gauge records with the
 stored references (`regression_ref.json`). It also checks that a parallel
 run (2 processors, the breaker crossing the processor boundary) and a run
 restarted at half time reproduce the serial, continuous run. `--update`
@@ -530,6 +532,49 @@ wall conditions (`fixedFluxPressure`, `zeroGradient`); add
 `libs ("libNHFOAM.so");` to `controlDict` for the utilities. The tests are
 in 5.7.
 
+**Measured records.** `theory timeSeries` makes the waves from a record of
+the surface elevation (a wave gauge, e.g. the incident gauge of a laboratory
+test) or of the displacement of a piston paddle, given as any OpenFOAM
+`Function1` of time (`table`, `tableFile`, `csvFile`), in the boundary
+wavemaker or in a wave zone:
+
+```c++
+wave
+{
+    theory      timeSeries;
+    depth       0.218;
+    direction   (1 0 0);
+    origin      (12.64 0 0);     // where the record holds (the patch)
+    eta                          // the elevation [m] ... or the paddle:
+    {                            //   paddle { ... }  displacement [m]
+        type    tableFile;       // file: ((t eta) ...)
+        file    "$FOAM_CASE/constant/gauge4.dat";
+    }
+    celerity    1.50;            // optional: u = c eta/(h + eta), default
+                                 //   c = sqrt(g (h + eta))
+    timeShift   265;             // record time = t + timeShift [s]
+    scale       1;               // factor on the record (0.01 for cm)
+    // velocity linear;          // u = eta sqrt(g/h) instead
+    // differenceStep 0.025;     // step of the time derivatives [s]
+    //                           //   (default: half the sampling interval)
+    // verticalVelocity no;      // w = 0 instead of continuity
+}
+```
+
+The velocity is uniform over the depth, as in a long wave, with w = (z_b/c)
+du/dt from continuity. A paddle record gives u = dX/dt and η from the same
+relation (the target of the absorption); the paddle stays at its rest
+position, which suits strokes that are small against the distances to the
+gauges. In a wave zone the record arrives after the travel time
+(x − x₀)·d/c₀, c₀ = √(gh). A table keeps its first and last values outside
+its range, so a record should start and end at rest. Keep the active
+absorption with an elevation record, so that the reflected waves leave the
+domain; a paddle record without it (`activeAbsorption no`) reflects them, as
+the laboratory paddle at rest does. The default velocity is the relation of
+the NTHMP benchmarks; for a single pulse of height H up to about 0.3h,
+`celerity` √(g(h + H)) makes it more accurate, while for steeper pulses
+the default is the better choice (5.7, 6.10).
+
 **Turbulence.** Any incompressible turbulence model of OpenFOAM can be used
 (`constant/turbulenceProperties`): the Smagorinsky LES model for the
 longshore current (6.8), or the stabilised k–ω model `kOmegaLF` of
@@ -641,6 +686,7 @@ structuredCoeffs { method simple; patches (bottom); simpleCoeffs { n (2 1 1); } 
 | `beachRunup` | solitary wave (H/d = 0.28) breaking and running up a 1:20 beach with **wetting and drying** (Synolakis 1987; NTHMP benchmark 4; about 40 s); prints the maximum run-up (R/d = 0.52, lab about 0.5) |
 | `longshoreCurrent` | **longshore current** on a 1:20 beach (Visser 1991, case 4; test 4.7 of Ma et al. 2012): oblique stream-function waves, periodic alongshore, breaking eddy viscosity, Smagorinsky model, log-law friction, wetting and drying, time-averaged velocity (48 000 cells, 100 s; about 1.5 h on one core) |
 | `irregularWaves` | **JONSWAP waves** (Hs = 3 cm, Tp = 1.5 s) from the **boundary wavemaker** `nhWaveVelocity` with active absorption, and an absorbing boundary at the other end, without relaxation zones (2DV flume, 120 s; about 10 min) |
+| `recordedWave` | solitary wave (H/h = 0.3) made by the boundary wavemaker from a **record of the surface elevation** (`theory timeSeries`, the table `constant/record.dat`), as from a wave gauge, with active absorption (2DV, 10.5 s; about 40 s); the crest is within 0.5% of H from 4 to 12 m |
 
 Each case runs with `./Allrun` and cleans with `./Allclean`. `validation/`
 holds the scripts used to generate cases and make the figures below
@@ -965,7 +1011,7 @@ breaking. In the cell layout, the switch is also sensitive to the time
 step: with Δt = 5 ms instead of 10 ms, the same case fails after 11
 periods.
 
-### 5.7 Wave input: boundary wavemaker, absorption, return current, irregular waves
+### 5.7 Wave input: boundary wavemaker, absorption, return current, irregular waves, measured records
 
 `validation/wavemaker.py` writes the cases, `plot_wavemaker.py` makes the
 figures. Flat flume, h = 0.4 m, 10 layers, Δx = 2 cm, Δt = 10 ms, regular
@@ -1013,12 +1059,51 @@ A_j = a_I e^{ikx_j} + a_R e^{−ikx_j} to the first harmonic at 30–70 gauges
   the convection scheme does not change (TVD or filtered central) and that
   regular waves of the peak period and 2 cm height do not show; its cause
   is not yet identified.
+- **Measured records** (`theory timeSeries`; `validation/timeseries_input.py`,
+  `plot_timeseries_input.py`). A solitary wave is made at x = 0 from its own
+  record, sampled every 0.02 s like a gauge, in a flat tank (h = 0.218 m,
+  Δx = 2 cm, 5 layers, Δt = 5 ms, 3 m sponge at the far end), and compared
+  12 m downstream with the exact wave of Babenko's equation. The elevation
+  record runs with the active absorption; the paddle record is the time
+  integral of the velocity c η/(h + η), without absorption. For reference,
+  the same wave also starts as the exact initial condition:
+
+  | H/h | input | crest / H | crest arrival | rms / H |
+  |---|---|---|---|---|
+  | 0.1 | exact initial condition | 1.000 | −9 ms | 0.4% |
+  | 0.1 | elevation, c = √(g(h + η)) (default) | 0.993 | −2 ms | 0.3% |
+  | 0.1 | elevation, c = celerity of the wave | 0.997 | −7 ms | 0.3% |
+  | 0.1 | paddle | 1.000 | −9 ms | 0.4% |
+  | 0.3 | exact initial condition | 0.997 | −6 ms | 0.6% |
+  | 0.3 | elevation, c = √(g(h + η)) (default) | 0.979 | +17 ms | 1.8% |
+  | 0.3 | elevation, c = celerity of the wave | 0.995 | −3 ms | 0.3% |
+  | 0.3 | paddle | 0.996 | −3 ms | 0.2% |
+  | 0.6 | exact initial condition | 0.980 | +3 ms | 0.5% |
+  | 0.6 | elevation, c = √(g(h + η)) (default) | 0.991 | 0 ms | 0.5% |
+  | 0.6 | elevation, c = celerity of the wave | 1.037 | −58 ms | 9.5% |
+  | 0.6 | paddle | 0.937 | +56 ms | 8.1% |
+
+  (Δt = 4 ms at H/h = 0.6.) Trailing waves stay below 0.1% of H at
+  H/h = 0.1 and 0.7% above. For a wave of permanent form u = c η/(h + η)
+  with its own celerity is the exact depth-averaged velocity (mass
+  conservation). Up to H/h = 0.3 that input, and the paddle record, are as
+  good as the exact initial condition, while the local √(g(h + η)) of the
+  NTHMP benchmarks carries too little water on the flanks (2% low and
+  17 ms late at H/h = 0.3). At H/h = 0.6 a velocity that is uniform over
+  the depth no longer fills the boundary column under the steep crest: the
+  paddle record, without absorption, makes the wave 6% low and 56 ms late,
+  and with an elevation record the absorption makes up the difference, too
+  much with the celerity of the wave (4% high) and about right with the
+  default (1% low, on time). The default is therefore the safer choice for
+  steep pulses, the celerity of the wave for H/h ≤ 0.3.
 
 ![wave input](doc/figures/wavemaker_regular.png)
 
 ![absorbing boundary](doc/figures/wavemaker_absorber.png)
 
 ![irregular waves](doc/figures/wavemaker_irregular.png)
+
+![measured records](doc/figures/timeseries_input.png)
 
 **The submerged bar: return current and long waves.** Case C of 5.4
 (H = 4.1 cm, T = 1.01 s, 10 layers, Δt = 5 ms) on the same mesh, with the
@@ -1100,7 +1185,7 @@ reflections from the walls of the half domain (0.135 a_I rms).
   the mesh points.
 - **Restarts** (section 3): 6·10⁻¹⁴ m after a restart with breaking, wetting
   and drying, with the fields written at full precision.
-- **Regression suite** (`validation/regression.py`, section 2): ten short
+- **Regression suite** (`validation/regression.py`, section 2): twelve short
   cases against stored references; the parallel run of its breaking case
   (`structured` decomposition, the boundary near the breaking point) matches
   the serial one to 2·10⁻⁷ m, the restarted run to 10⁻¹² m.
@@ -1130,6 +1215,7 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | 4.7 longshore current on a plane beach | Visser (1991) | 6.8 |
 | (NHWAVE example) surf zone | Ting & Kirby (1994) | 6.6, 6.7 |
 | (NHWAVE example, NTHMP 6) solitary waves on a conical island | Briggs et al. (1995) | 6.9 |
+| (NTHMP 5, in NHWAVE's benchmark report) solitary waves on a composite beach with a wall | Yeh et al. (1996) | 6.10 |
 
 Three of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, the solitary wave that
@@ -1594,6 +1680,138 @@ and run time on 2 cores:
 - **Cost:** on the same grid NHFOAM was 3–6 times faster than NHWAVE
   (4–7 min against 21–27 min).
 
+### 6.10 Solitary waves on a composite beach with a vertical wall (NTHMP benchmark 5)
+
+![composite beach gauges](doc/figures/composite_beach_gauges.png)
+
+The Coastal and Hydraulics Laboratory of the US Army Corps of Engineers
+built a model of Revere Beach in a flume: 0.218 m of water from the
+wavemaker to 15.04 m, then slopes of 1:53, 1:150 and 1:13 up to a vertical
+wall at 23.23 m that stands in 4.7 cm of water (benchmark problem 3 of the
+1995 long-wave run-up workshop, Yeh et al. 1996; NTHMP benchmark 5; one of
+the tests of NHWAVE's tsunami benchmark report, Tehranirad et al. 2012).
+Solitary waves of target H/d = 0.05, 0.30 and 0.70 (cases A, B and C;
+0.038, 0.26 and 0.68 at gauge 4) shoal over the slopes, reflect from the
+wall (B and C break first) and run back; gauges 4–10 recorded them, and the
+highest run-up on the wall was measured. The benchmark gives the paddle
+trajectories and recommends driving the models with the record of the
+incident gauge 4, which is what the time-series input is for.
+`validation/composite_beach.py` writes the cases from the files of the
+NTHMP benchmark collection (`rjleveque/nthmp-benchmark-problems`),
+`plot_composite_beach.py` makes the figure.
+
+Both models use 3 layers, log-law friction with ks = 0.1 mm (NHWAVE's Zob
+in its examples of the inundation benchmarks) and a 5 mm film; NHFOAM runs
+its hybrid breaking model. NHFOAM makes the wave in three ways on a 1 cm
+grid (the grid of NHWAVE's report):
+
+- **gauge 4 record**: the domain starts at gauge 4, where the direct pulse
+  (to 275 s) drives `nhWaveVelocity` with the benchmark's velocity relation
+  and the active absorption;
+- **paddle record**: the whole flume from the middle of the paddle stroke,
+  driven by the paddle trajectory, without absorption;
+- **solitary wave**: the whole flume, starting from the exact solitary wave
+  of the height measured at gauge 4, with its crest timed to the measured
+  one there.
+
+The last is also NHWAVE's input. On the 1 cm grid NHWAVE grows short-wave
+noise in this flume (wiggles of ±1.5 mm on the 8 mm crest of case A, crests
+3–8% high, with or without its k–ε model, in a flat tank as well), so the
+two models are compared on a 2 cm grid, where NHWAVE carries the solitary
+wave cleanly. NHWAVE's k–ε model, which is on in its inundation examples,
+damps the steep waves of cases B and C already on the flat bed (in a flat
+tank a wave of H/d = 0.26 keeps 0.87 H after 3.5 m with it and 1.02 H
+without it), so NHWAVE runs without it and, for reference, with it. The lab
+records start from their mean over the first 2 s, and no run is shifted in
+time.
+
+Crests against the measured ones (model/lab − 1): the incident crest at
+gauges 4, 5, 7 and 8 (at gauge 4 of the record run, the boundary column
+against the record), the highest crest at gauges 9 and 10, where incident
+and reflected waves overlap, the reflected crest at gauge 5; the rms
+difference over gauges 5–10 from the arrival of the wave; the highest water
+level at the wall:
+
+| case | run | g4 | g5 | g7 | g8 | g9 | g10 | g5 refl. | rms | wall R |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A | lab | | | | | | | | | 2.74 cm |
+| A | NHFOAM, gauge 4 record | 0% | −5% | −5% | +3% | −4% | −10% | +10% | 0.08 cm | 2.30 cm |
+| A | NHFOAM, paddle record | +27% | +16% | +15% | +25% | +25% | +19% | +40% | 0.19 cm | 2.76 cm |
+| A | NHFOAM, solitary wave, 2 cm | 0% | −9% | −9% | −2% | −1% | −2% | +8% | 0.11 cm | 2.13 cm |
+| A | NHWAVE, solitary wave, 2 cm | +1% | −8% | −9% | −1% | +1% | −1% | +14% | 0.11 cm | 2.16 cm |
+| A | NHWAVE with k–ε, 2 cm | +1% | −8% | −9% | −1% | +3% | −1% | +13% | 0.11 cm | 2.19 cm |
+| B | lab | | | | | | (clipped) | | | 45.7 cm |
+| B | NHFOAM, gauge 4 record | −1% | +10% | −7% | −1% | +7% | | +16% | 0.63 cm | 17.4 cm |
+| B | NHFOAM, paddle record | +15% | +22% | +7% | +15% | +26% | | +27% | 1.12 cm | 18.6 cm |
+| B | NHFOAM, solitary wave, 2 cm | −1% | +5% | −9% | −3% | +5% | | +19% | 0.75 cm | 18.8 cm |
+| B | NHWAVE, solitary wave, 2 cm | +5% | +11% | −8% | −5% | +5% | | +25% | 0.90 cm | 19.6 cm |
+| B | NHWAVE with k–ε, 2 cm | −21% | −15% | −26% | −23% | −2% | | −7% | 0.27 cm | 17.5 cm |
+| C | lab | | | | | | | | | 27.4 cm |
+| C | NHFOAM, gauge 4 record | −14% | +12% | −18% | +46% | +30% | −12% | +27% | 1.34 cm | 23.8 cm |
+| C | NHFOAM, paddle record | +7% | +15% | −18% | +46% | +28% | −12% | +29% | 1.90 cm | 23.5 cm |
+| C | NHFOAM, solitary wave, 2 cm | −7% | 0% | −17% | +39% | +29% | −16% | +20% | 1.08 cm | 23.6 cm |
+| C | NHWAVE, solitary wave, 2 cm | −20% | +1% | −14% | +75% | +34% | −11% | +13% | 1.17 cm | 28.4 cm |
+| C | NHWAVE with k–ε, 2 cm | −21% | −15% | −15% | +71% | +21% | −17% | −5% | 0.92 cm | 24.7 cm |
+
+- **The record of gauge 4** carries the measured pulse, which is not a
+  solitary wave: in case A it is 20% narrower at half height than the
+  solitary wave of its height (1.25 s against 1.55 s). With it the
+  incident crests at gauges 5–8 are within 5% of the measured ones in case
+  A and within 10% in case B, they arrive within 0.13 s, and the rms
+  difference is the smallest of NHFOAM's three inputs (0.08 and 0.63 cm).
+  The
+  benchmark's velocity and the celerity √(g(d + H)) give the same crests
+  within 2% in these two cases.
+- **Case C** (H/d = 0.68) is at the limit of the input: the boundary column
+  falls 14% short of the recorded crest (22% with √(g(d + H))), as in the
+  flat tank at H/h = 0.6 (5.7), and the absorption makes up the volume, so
+  the crest at gauge 5 is 12% above the measured one. Further on the run is
+  governed by breaking, in both models: the measured wave peaks at gauge 7
+  (19.4 m) and plunges before gauge 8, while the models' waves are 14–18%
+  lower at gauge 7 (NHFOAM breaks at 16.8–18.4 m) and 39–75% higher at
+  gauge 8: the broken waves keep too much height, as on the spilling-breaker
+  beaches (6.7).
+- **The paddle record** makes waves 27%, 15% and 7% higher than measured at
+  gauge 4 (cases A, B, C), which arrive 0.2–0.6 s early. In the flat tank
+  the paddle input reproduces the wave of a piston that follows its record
+  to 0.4% up to H/h = 0.3 (5.7), so the laboratory paddle displaced less
+  water than its record implies (leakage
+  past the paddle or the calibration of its feedback signal; the measured
+  heights fell short of the target ones). This is why the benchmark
+  recommends the record of gauge 4.
+- **NHFOAM and NHWAVE** with the same input on the same grid: in case A the
+  crests agree within 2% at every gauge, the reflected crest at gauge 5 is
+  14% high in NHWAVE and 8% in NHFOAM, and the run-up on the wall differs
+  by 0.03 cm. In case B NHWAVE's crests are within 6% of NHFOAM's. In case
+  C the near-limit wave loses height on the flat bed before gauge 4 in both
+  models, 20% in NHWAVE and 7% in NHFOAM (which does not break there);
+  after that both follow the same pattern, and NHWAVE's run-up on the wall
+  is the closer one (28.4 cm against 23.6 cm, lab 27.4 cm). With its k–ε
+  model NHWAVE's incident crests are already 21% low at gauge 4 in cases B
+  and C, and 15–26% low at gauges 5 and 7; its small rms in case B comes
+  from its slower wave, which meets the measured arrival times, not from
+  the crests.
+- **The run-up on the wall** is 16% low in case A (2.30 against 2.74 cm)
+  and 13% low in case C (23.8 against 27.4 cm). In case B the measured
+  45.7 cm (2.1 d) is a jet thrown up the wall by the wave breaking against
+  it, which a σ-mesh, with one free surface per column, cannot represent;
+  both models give 17–20 cm.
+- **Timing of the reflection.** Both models send the reflected crest back
+  to gauges 4–7 early: by up to 0.5 s in case A, 0.2–0.5 s in B and
+  0.4–0.8 s in C. As the two models agree, the difference probably lies in the lab
+  (the position of the wall, or the time the water takes to climb it and
+  fall back).
+- **The measurements.** The crest changes by +11%, −6% and −7% from gauge 4
+  to gauge 5 on the flat bed (cases A, B, C), which a wave of permanent
+  form does not do: the gauges agree to about 10%, and their records come
+  in steps of 0.3 mm (0.001 ft), 4% of the crest in case A. Gauge 10
+  saturated at 5.3 cm in case B (its record is flat for 0.2 s on both
+  crests), so its crest is left out.
+- **The grids and the cost.** NHFOAM's solitary runs on 1 and 2 cm agree
+  within 3% at every gauge. On one core NHFOAM took 2–3 min on the 2 cm
+  grid and NHWAVE 7–21 min (each run sharing the machine with another), and
+  NHFOAM 4 min (record runs) to 15 min (whole flume) on the 1 cm grid.
+
 ## 7. Limitations (this version)
 
 - **Wetting and drying** has been tested in 2DV, on triangulated strips and
@@ -1617,7 +1835,10 @@ and run time on 2 cores:
   give two thirds of the measured current, at about the right place
   (`longshore.visser(..., dx=0.0343, ny=128, nproc=8)` writes the fine grid).
 - **Wave generation** is linear (no second-order correction for the bound
-  long waves of groups). The absorbing boundary is uniform over the depth
+  long waves of groups). Measured records enter with a depth-uniform
+  long-wave velocity; under very steep pulses (H/h ≈ 0.6–0.7) the boundary
+  column falls behind the crest (14% in case C of 6.10) and the absorption
+  makes up the volume. The absorbing boundary is uniform over the depth
   and reflects 9–13% at kh ≈ 1.7. Directional spreading has not been tested
   in a basin. Irregular waves lose 3–5% of Hm0 over 12 m, in the peak band,
   for a reason not yet identified (5.7).
@@ -1654,7 +1875,9 @@ and irregular waves (5.7); triangulated meshes with breaking, wetting and
 drying and diffraction (5.8); the landslide with its beach (6.5); and the
 regression suite (5.9). Then the record of the highest water level
 (`etaMax`) and the solitary waves on a conical island, the first 3D test of
-wetting and drying (6.9).
+wetting and drying (6.9). Then measured records as wave input
+(`theory timeSeries`: gauge and paddle records, 5.7) with the composite
+beach of NTHMP benchmark 5 (6.10).
 
 Next:
 
@@ -1761,6 +1984,15 @@ Next:
 - Briggs, M.J., Synolakis, C.E., Harkins, G.S., Green, D.R. (1995). Laboratory
   experiments of tsunami runup on a circular island. *Pure and Applied
   Geophysics* 144, 569–593.
+- Yeh, H., Liu, P.L.-F., Synolakis, C.E. (eds.) (1996). *Long-Wave Runup
+  Models.* World Scientific, Singapore (benchmark problem 3: runup of
+  solitary waves on a vertical wall, the Revere Beach model).
+- Kânoğlu, U., Synolakis, C.E. (1998). Long wave runup on piecewise linear
+  topographies. *JFM* 374, 1–28.
+- Tehranirad, B., Kirby, J.T., Ma, G., Shi, F. (2012). Tsunami benchmark
+  results for non-hydrostatic wave model NHWAVE (version 1.1). Research
+  Report CACR-12-03, Center for Applied Coastal Research, University of
+  Delaware.
 
 ## License
 

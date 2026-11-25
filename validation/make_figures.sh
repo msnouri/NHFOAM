@@ -24,6 +24,10 @@
 #   BAR2 : submerged bar with the boundary wavemaker (make_case.bar_case)
 #   LS   : the landslide with its beach (make_case.enet_grilli_case)
 #   CI   : the conical island (conical_island.py <dir>: nf_A_05 ... nw_C_10)
+#   TS   : measured records on a flat tank (timeseries_input.py:
+#          ts_<exact|eta|etaC|paddle>_<10|30>)
+#   CB   : the composite beach (composite_beach.py: nf_<A|B|C>_<gauge4|
+#          paddle|solitary>, nw_<A|B|C>)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -42,6 +46,8 @@ UN=${UN:-/home/claude/runs_un}
 BAR2=${BAR2:-/home/claude/runs_bar2}
 LS=${LS:-/home/claude/runs_ls}
 CI=${CI:-/home/claude/runs_ci}
+TS=${TS:-/home/claude/runs_ts}
+CB=${CB:-/home/claude/runs_cb}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -186,3 +192,8 @@ for c in A B C; do
 done
 python3 plot_conical_island.py $OUT/conical_island_gauges.png \
     $OUT/conical_island_runup.png "${CIR[@]}"
+
+# Measured records (time-series input) and the composite beach (NTHMP
+# benchmark 5)
+python3 plot_timeseries_input.py $OUT/timeseries_input.png $TS
+python3 plot_composite_beach.py $OUT/composite_beach_gauges.png $CB

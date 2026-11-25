@@ -3,8 +3,9 @@
 \label{sec:ext}
 
 This section tests what was added after the comparisons with NHWAVE: the
-boundary wavemaker with active absorption, the return current and irregular
-waves (Section~\ref{sec:zones}), the model on triangulated meshes, and the
+boundary wavemaker with active absorption, the return current, irregular
+waves and measured records (Section~\ref{sec:zones}), with the composite
+beach of NTHMP benchmark 5, the model on triangulated meshes, and the
 checks that keep the code reproducible: parallel runs, restarts and a
 regression suite.
 
@@ -182,6 +183,214 @@ wavemaker, against \citet{luth1994}.}
 \label{fig:bar-bc}
 \end{figure}
 
+\subsection{Measured records}
+\label{sec:ts}
+
+The time-series input \eqref{eq:timeseries} was first checked on a wave
+whose answer is known (script \code{timeseries\_input.py}): a solitary wave
+of $H/h = 0.1$, 0.3 and 0.6 is made at $x = 0$ of a flat tank ($h = 0.218$ m,
+$\Delta x = 2$ cm, 5 layers, $\Delta t = 5$ ms, a 3 m sponge at the far end)
+from its own record, sampled every 0.02 s like a gauge, and compared 12 m
+downstream with the exact wave of Babenko's equation. The elevation record
+runs with the active absorption, the paddle record (the time integral of
+$c\,\eta/(h+\eta)$) without it; for reference the same wave also starts as
+the exact initial condition (Table~\ref{tab:ts}, Fig.~\ref{fig:ts}).
+
+\begin{table}[!htbp]
+\centering
+\caption{Solitary wave made from its record at $x = 0$, 12 m downstream:
+crest height, arrival of the crest and rms difference over the pulse
+against the exact wave.}
+\label{tab:ts}
+\small
+\begin{tabular}{llccc}
+\toprule
+$H/h$ & input & crest$/H$ & arrival & rms$/H$ \\
+\midrule
+0.1 & exact initial condition & 1.000 & $-9$ ms & 0.4\% \\
+0.1 & elevation, $c = \sqrt{g(h+\eta)}$ & 0.993 & $-2$ ms & 0.3\% \\
+0.1 & elevation, $c$ of the wave & 0.997 & $-7$ ms & 0.3\% \\
+0.1 & paddle & 1.000 & $-9$ ms & 0.4\% \\
+\midrule
+0.3 & exact initial condition & 0.997 & $-6$ ms & 0.6\% \\
+0.3 & elevation, $c = \sqrt{g(h+\eta)}$ & 0.979 & $+17$ ms & 1.8\% \\
+0.3 & elevation, $c$ of the wave & 0.995 & $-3$ ms & 0.3\% \\
+0.3 & paddle & 0.996 & $-3$ ms & 0.2\% \\
+\midrule
+0.6 & exact initial condition & 0.980 & $+3$ ms & 0.5\% \\
+0.6 & elevation, $c = \sqrt{g(h+\eta)}$ & 0.991 & 0 ms & 0.5\% \\
+0.6 & elevation, $c$ of the wave & 1.037 & $-58$ ms & 9.5\% \\
+0.6 & paddle & 0.937 & $+56$ ms & 8.1\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Up to $H/h = 0.3$ the input with the celerity of the wave, and the paddle
+record, are as good as the exact initial condition: crests within 0.5\% of
+$H$, arrival within 10 ms after 12 m, trailing waves below 0.1\%
+($H/h = 0.1$) and 0.7\% of $H$ ($H/h = 0.3$). The local celerity
+$\sqrt{g(h+\eta)}$ of the NTHMP benchmarks carries too little water on the
+flanks of the pulse, so the wave of $H/h = 0.3$ comes out 2\% low and 17 ms
+late. At $H/h = 0.6$ (with $\Delta t = 4$ ms) a velocity that is uniform
+over the depth no longer fills the boundary column under the steep crest:
+the paddle record, without absorption, makes the wave 6\% low and 56 ms
+late, and with an elevation record the active absorption makes up the
+difference, too much with the celerity of the wave (4\% high, 58 ms early)
+and about right with the local celerity (1\% low, on time). The local
+celerity is therefore the safer choice for steep pulses, and
+$\sqrt{g(h+H)}$ the better one for $H/h \le 0.3$.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{timeseries_input.pdf}
+\caption{Solitary waves made from their records at $x = 0$, 12 m
+downstream, against the exact wave: elevation (top) and difference from the
+exact wave (bottom).}
+\label{fig:ts}
+\end{figure}
+
+\subsection{Solitary waves on a composite beach with a vertical wall}
+\label{sec:cb}
+
+The Coastal and Hydraulics Laboratory of the US Army Corps of Engineers
+built a model of Revere Beach in a flume: 0.218 m of water from the
+wavemaker to 15.04 m, then slopes of 1:53, 1:150 and 1:13 up to a vertical
+wall at 23.23 m that stands in 4.7 cm of water (benchmark problem 3 of the
+1995 long-wave run-up workshop, \citealp{yeh1996}; NTHMP benchmark 5;
+\citealp{kanoglu1998} give its linear solution). It is one of the tests of
+NHWAVE's tsunami benchmark report \citep{tehranirad2012}. Solitary waves of
+target $H/d = 0.05$, 0.30 and 0.70 (cases A, B and C; 0.038, 0.26 and 0.68
+at the incident gauge 4) shoal over the slopes, reflect from the wall (B and
+C break first) and run back past gauges 4--10, and the highest run-up on
+the wall was measured. The benchmark gives the paddle trajectories and
+recommends driving the models with the record of gauge 4, which is what the
+time-series input is for (script \code{composite\_beach.py}).
+
+Both models use 3 layers, log-law friction with $k_s = 0.1$ mm (NHWAVE's
+\code{Zob} in its examples of the inundation benchmarks) and a 5 mm film;
+\NHFOAM\ runs its hybrid breaking model. \NHFOAM\ makes the wave in three
+ways on a 1 cm grid, the grid of NHWAVE's report: from the record of gauge 4
+(the domain starts at the gauge, and the direct pulse, to 275 s, drives
+\code{nhWaveVelocity} with the benchmark's velocity relation and the
+active absorption), from the paddle record (the whole flume, from the middle
+of the paddle stroke, without absorption), and as the exact solitary wave of
+the height measured at gauge 4, its crest timed to the measured one there.
+The last is also NHWAVE's input. On the 1 cm grid NHWAVE grows short-wave
+noise in this flume (wiggles of $\pm1.5$ mm on the 8 mm crest of case A,
+crests 3--8\% high, with or without its $k$--$\varepsilon$ model, in a flat
+tank as well), so the two models are compared on a 2 cm grid, where NHWAVE
+carries the solitary wave cleanly. NHWAVE's $k$--$\varepsilon$ model, on in
+its inundation examples, damps the steep waves of cases B and C already on
+the flat bed (in a flat tank a wave of $H/d = 0.26$ keeps $0.87H$ after
+3.5 m with it and $1.02H$ without it), so NHWAVE runs without it and, for
+reference, with it. Table~\ref{tab:cb} and Fig.~\ref{fig:cb} compare the
+runs with the measurements; no run is shifted in time.
+
+\begin{table}[!htbp]
+\centering
+\caption{Composite beach: crests against the measured ones (model/lab $-$ 1,
+\%): the incident crest at gauges 4, 5, 7 and 8 (at gauge 4 of the record
+run the boundary column against the record), the highest crest at gauges 9
+and 10, where the incident and reflected waves overlap, and the reflected
+crest at gauge 5; the rms difference over gauges 5--10 from the arrival of
+the wave; the highest water level $R$ at the wall. Gauge 10 saturated in
+case B.}
+\label{tab:cb}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llrrrrrrrcc}
+\toprule
+case & run & g4 & g5 & g7 & g8 & g9 & g10 & g5 refl. & rms (cm) & $R$ (cm) \\
+\midrule
+A & lab & & & & & &  & & & 2.74 \\
+A & \NHFOAM, gauge 4 record & 0 & $-$5 & $-$5 & +3 & $-$4 & $-$10 & +10 & 0.08 & 2.30 \\
+A & \NHFOAM, paddle record & +27 & +16 & +15 & +25 & +25 & +19 & +40 & 0.19 & 2.76 \\
+A & \NHFOAM, solitary, 2 cm & 0 & $-$9 & $-$9 & $-$2 & $-$1 & $-$2 & +8 & 0.11 & 2.13 \\
+A & NHWAVE, solitary, 2 cm & +1 & $-$8 & $-$9 & $-$1 & +1 & $-$1 & +14 & 0.11 & 2.16 \\
+A & NHWAVE $k$--$\varepsilon$, 2 cm & +1 & $-$8 & $-$9 & $-$1 & +3 & $-$1 & +13 & 0.11 & 2.19 \\
+\midrule
+B & lab & & & & & & (clipped) & & & 45.7 \\
+B & \NHFOAM, gauge 4 record & $-$1 & +10 & $-$7 & $-$1 & +7 &  & +16 & 0.63 & 17.4 \\
+B & \NHFOAM, paddle record & +15 & +22 & +7 & +15 & +26 &  & +27 & 1.12 & 18.6 \\
+B & \NHFOAM, solitary, 2 cm & $-$1 & +5 & $-$9 & $-$3 & +5 &  & +19 & 0.75 & 18.8 \\
+B & NHWAVE, solitary, 2 cm & +5 & +11 & $-$8 & $-$5 & +5 &  & +25 & 0.90 & 19.6 \\
+B & NHWAVE $k$--$\varepsilon$, 2 cm & $-$21 & $-$15 & $-$26 & $-$23 & $-$2 &  & $-$7 & 0.27 & 17.5 \\
+\midrule
+C & lab & & & & & &  & & & 27.4 \\
+C & \NHFOAM, gauge 4 record & $-$14 & +12 & $-$18 & +46 & +30 & $-$12 & +27 & 1.34 & 23.8 \\
+C & \NHFOAM, paddle record & +7 & +15 & $-$18 & +46 & +28 & $-$12 & +29 & 1.90 & 23.5 \\
+C & \NHFOAM, solitary, 2 cm & $-$7 & 0 & $-$17 & +39 & +29 & $-$16 & +20 & 1.08 & 23.6 \\
+C & NHWAVE, solitary, 2 cm & $-$20 & +1 & $-$14 & +75 & +34 & $-$11 & +13 & 1.17 & 28.4 \\
+C & NHWAVE $k$--$\varepsilon$, 2 cm & $-$21 & $-$15 & $-$15 & +71 & +21 & $-$17 & $-$5 & 0.92 & 24.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{composite_beach_gauges.pdf}
+\caption{Solitary waves on the composite beach, cases A--C (rows), at
+gauges 4, 5, 7, 9 and 10: \NHFOAM\ driven by the record of gauge 4 and by
+the paddle record (1 cm grid), \NHFOAM\ and NHWAVE (without its
+$k$--$\varepsilon$ model) from the exact solitary wave (2 cm grid), against
+the measurements.}
+\label{fig:cb}
+\end{figure}
+
+\paragraph{The record of gauge 4} carries the measured pulse, which is not a
+solitary wave: in case A it is 20\% narrower at half height than the
+solitary wave of its height (1.25 s against 1.55 s). With it the incident
+crests at gauges 5--8 are within 5\% of the measured ones in case A and
+within 10\% in case B, they arrive within 0.13 s, and the rms difference is
+the smallest of the three inputs (0.08 and 0.63 cm). The benchmark's
+velocity and the celerity $\sqrt{g(d+H)}$ give the same crests within 2\% in
+these cases. Case C ($H/d = 0.68$) is at the limit of the input: the
+boundary column falls 14\% short of the recorded crest (22\% with
+$\sqrt{g(d+H)}$), as in the flat tank at $H/h = 0.6$, and the absorption
+makes up the volume, so the crest at gauge 5 is 12\% above the measured one.
+
+\paragraph{The paddle record} makes waves 27\%, 15\% and 7\% higher than
+measured at gauge 4 (cases A, B, C), which arrive 0.2--0.6 s early. In the
+flat tank the paddle input reproduces the wave of a piston that follows its
+record to 0.4\% up to $H/h = 0.3$, so the laboratory paddle displaced less
+water than its record implies (leakage past the paddle, or the calibration
+of its feedback signal; the measured heights also fell short of the target
+ones). This is why the benchmark recommends the record of gauge 4.
+
+\paragraph{Breaking.} In case C the measured wave peaks at gauge 7 (19.4 m)
+and plunges before gauge 8, while the waves of both models are 14--18\%
+lower at gauge 7 (\NHFOAM\ breaks at 16.8--18.4 m) and 39--75\% higher at
+gauge 8: the broken waves keep too much height, as on the spilling-breaker
+beaches (Section~\ref{sec:brk}).
+
+\paragraph{\NHFOAM\ and NHWAVE} with the same input on the same grid agree
+within 2\% at every gauge in case A, where the reflected crest at gauge 5 is
+14\% high in NHWAVE and 8\% in \NHFOAM, and the run-up on the wall differs
+by 0.03 cm. In case B NHWAVE's crests are within 6\% of \NHFOAM's. In case
+C the near-limit wave loses height on the flat bed before gauge 4 in both
+models, 20\% in NHWAVE and 7\% in \NHFOAM\ (which does not break there);
+after that the two follow the same pattern, and NHWAVE's run-up on the wall
+is the closer one (28.4 cm against 23.6 cm, measured 27.4 cm). With its
+$k$--$\varepsilon$ model NHWAVE's incident crests are already 21\% low at
+gauge 4 in cases B and C; its small rms in case B comes from its slower
+wave, which meets the measured arrival times, not from the crests.
+
+\paragraph{The wall and the measurements.} The run-up on the wall is 16\%
+low in case A (2.30 against 2.74 cm) and 13\% low in case C (23.8 against
+27.4 cm). In case B the measured 45.7 cm ($2.1d$) is a jet thrown up the
+wall by the wave breaking against it, which a $\sigma$-mesh, with one free
+surface per column, cannot represent; both models give 17--20 cm. Both
+models also send the reflected crest back to gauges 4--7 early, by up to
+0.5 s in case A, 0.2--0.5 s in B and 0.4--0.8 s in C; as they agree, the
+difference probably lies in the lab (the position of the wall, or the time
+the water takes to climb it and fall back). The measured crest changes by
++11\%, $-6\%$ and $-7\%$ from gauge 4 to gauge 5 on the flat bed, which a
+wave of permanent form does not do: the gauges agree to about 10\%, and
+their records come in steps of 0.3 mm (0.001 ft), 4\% of the crest in case
+A. \NHFOAM's solitary runs on the 1 and 2 cm grids agree within 3\% at every
+gauge. On one core \NHFOAM\ took 2--3 min on the 2 cm grid and NHWAVE
+7--21 min, each run sharing the machine with another.
+
 \subsection{Unstructured meshes}
 \label{sec:unstr}
 
@@ -279,9 +488,10 @@ needs the fields at full precision (17 digits or binary): with 10 digits the
 written state differs by $10^{-10}$, and the on/off breaking flags amplify
 that to millimetres within seconds.
 
-\paragraph{Regression suite.} \code{validation/regression.py} runs ten short
+\paragraph{Regression suite.} \code{validation/regression.py} runs twelve short
 cases in about three minutes on one core (standing and solitary waves, the
-boundary wavemaker with regular and irregular waves, a dam break and the
+boundary wavemaker with regular and irregular waves and with measured
+elevation and paddle records, a dam break and the
 run-up with wetting and drying, breaking on Ting \& Kirby's beach, the
 $k$--$\omega$ model, a bottom uplift and the triangulated beach) and compares
 the extremes and final values of their gauge records with stored references.

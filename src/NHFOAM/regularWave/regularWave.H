@@ -20,7 +20,7 @@ Description
     Target wave on constant depth for the wave-making zones, the boundary
     wavemaker (nhWaveVelocity) and the initial conditions (nhSetWaves):
     surface elevation and velocity, with an optional smooth start-up ramp.
-    Three theories:
+    Four theories:
 
     linear (default): the Airy wave,
         eta = (H/2) cos(theta),  theta = k (x - x0).d - omega t + phase,
@@ -45,6 +45,27 @@ Description
     with z_b the height above the bottom and uMean the Eulerian mean current
     (the return current of a closed flume for zero mass flux).
 
+    timeSeries: a measured record, either of the surface elevation eta(t)
+    (a wave gauge, e.g. the incident gauge of a laboratory test) or of the
+    displacement X(t) of a piston paddle.  The velocity is uniform over the
+    depth, as in a long wave:
+        eta record:    u = c eta/(h + eta),  c = sqrt(g (h + eta))
+                       (velocity longWave, the relation of the NTHMP
+                       benchmarks; with 'celerity' given, c is that value),
+                       or u = eta sqrt(g/h) (velocity linear);
+        paddle record: u = dX/dt, and eta from the same relation (used by
+                       the active absorption of the boundary wavemaker),
+    and w = (z_b/c) du/dt follows from continuity for a wave travelling
+    along 'direction' (verticalVelocity no: w = 0).  Time derivatives are
+    central differences with the step differenceStep (default: half the
+    sampling interval of a table, otherwise 1 ms).  The record holds at
+    'origin'; elsewhere (relaxation zones) it is shifted by the travel time
+    (x - x0).d/c0, c0 = sqrt(g h) or 'celerity'.  The record is any
+    Function1 of time (table, tableFile, csvFile, ...), read at the time
+    t + timeShift and multiplied by 'scale'.  Outside the record a table
+    keeps its first and last values, so a record should start and end at
+    the still-water level (eta record) or at rest (paddle record).
+
     Return current: a linear wave applied up to the moving free surface
     carries the mass flux M = g a^2/(2 c) per component (the Stokes
     transport between trough and crest).  With returnCurrent (default yes,
@@ -56,6 +77,7 @@ Description
     Dictionary entries
     \verbatim
         theory          linear;     // linear | irregular | streamFunction
+                                    // | timeSeries
         waveHeight      0.02;       // H [m]
         wavePeriod      2.02;       // T [s]
         depth           0.4;        // still-water depth h [m]
@@ -93,6 +115,30 @@ Description
         uMean           -0.024;     // Eulerian mean current [m/s]
         etaCoeffs       (...);      // E_0 ... E_N [m]
         psiCoeffs       (...);      // B_1 ... B_N [m^2/s]
+
+        // timeSeries only: the elevation record [m] ...
+        eta
+        {
+            type        tableFile;  // or table, csvFile (any Function1)
+            file        "$FOAM_CASE/constant/gauge4.dat";
+        }
+        // ... or the paddle displacement [m] (instead of eta)
+        paddle
+        {
+            type        csvFile;
+            nHeaderLine 0;
+            refColumn   0;
+            componentColumns (1);
+            separator   " ";
+            mergeSeparators yes;
+            file        "$FOAM_CASE/constant/paddle.txt";
+        }
+        velocity        longWave;   // longWave (default) | linear
+        celerity        1.5;        // [m/s], optional
+        timeShift       265;        // [s], optional: record time = t + shift
+        scale           1;          // optional factor on the record
+        differenceStep  0.02;       // [s], optional
+        verticalVelocity yes;       // optional (default yes)
     \endverbatim
 
     Directions of the components are measured from 'direction',
@@ -112,6 +158,8 @@ SourceFiles
 #include "scalarField.H"
 #include "vectorList.H"
 #include "DynamicList.H"
+#include "Function1.H"
+#include "autoPtr.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -155,11 +203,51 @@ class regularWave
         scalarList E_;
         scalarList B_;
 
+        //- Time series (theory timeSeries)
+        bool timeSeries_;
+
+        //- Record of the paddle displacement (otherwise of the elevation)
+        bool paddle_;
+
+        //- Elevation or paddle displacement against the record time
+        autoPtr<Function1<scalar>> series_;
+
+        //- Linear relation u = eta sqrt(g/h) (otherwise the long-wave one)
+        bool linearRelation_;
+
+        //- Celerity of the long-wave relation (0: sqrt(g (h + eta)))
+        scalar celerity_;
+
+        //- Record time = t + timeShift_; factor on the record
+        scalar timeShift_;
+        scalar scale_;
+
+        //- Step of the central differences in time
+        scalar dtDiff_;
+
+        //- Vertical velocity from continuity (otherwise zero)
+        bool verticalVelocity_;
+
 
     // Private Member Functions
 
         //- Phase of the stream-function wave at x and t
         scalar theta(const point& x, const scalar t) const;
+
+        //- Record time at x for the model time t (time series)
+        scalar recordTime(const point& x, const scalar t) const;
+
+        //- Depth-uniform velocity from the elevation (long-wave relation)
+        scalar velocityFromEta(const scalar eta) const;
+
+        //- Elevation from the depth-uniform velocity (its inverse)
+        scalar etaFromVelocity(const scalar u) const;
+
+        //- Elevation of the time series at the record time tau
+        scalar seriesEta(const scalar tau) const;
+
+        //- Depth-uniform velocity of the time series at the record time tau
+        scalar seriesVelocity(const scalar tau) const;
 
 
 public:
@@ -207,6 +295,10 @@ public:
         {
             return h_;
         }
+
+        //- Phase speed of the (peak) wave: omega/k, or for a time series
+        //  the celerity of its long-wave relation (sqrt(g h) by default)
+        scalar phaseSpeed() const;
 
         //- Number of linear components (0 for the stream-function wave)
         label nComponents() const

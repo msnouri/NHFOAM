@@ -62,7 +62,16 @@ a vertical cylinder are within 7\% of linear theory. Around the conical
 island of \citet{briggs1995}, the first three-dimensional test of wetting and
 drying, \NHFOAM\ and NHWAVE on the same grid agree to within 4\% at most
 gauges and to $0.02d$ on average in the run-up, and both reproduce the shape
-of the measured run-up around the island; \NHFOAM\ was 3 to 6 times faster. Restarts are
+of the measured run-up around the island; \NHFOAM\ was 3 to 6 times faster.
+Measured gauge and paddle records can now drive the boundary wavemaker: a
+solitary wave made from its own record arrives within 0.5\% of its height
+and 10 ms of the exact wave after 12 m up to $H/h = 0.3$, and on the
+composite beach of NTHMP benchmark 5 the record of the incident gauge
+reproduces the measured incident crests within 10\% in the two smaller
+cases, while the laboratory's paddle record gives waves 7--27\% too high.
+On that beach \NHFOAM\ and NHWAVE agree within 2--6\% with the same input
+and grid, and NHWAVE's $k$--$\varepsilon$ model damps the steeper waves
+before they reach the slope. Restarts are
 exact, parallel runs reproduce serial ones with breakers across processor
 boundaries, and a regression suite guards both.
 

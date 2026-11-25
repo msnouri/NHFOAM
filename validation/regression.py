@@ -86,6 +86,18 @@ def c_strip(case):
     unstructured.runup_strip(case, W=0.08, lc=0.04, tstar_end=20.0, dt=0.004)
 
 
+def c_ts_eta(case):
+    # solitary wave (H/h = 0.3) from the record of its elevation at the inflow
+    import timeseries_input as ti
+    ti.flat_case(case, "eta", Hh=0.3, dx=0.04, nz=3, dt=0.01, endTime=5.0)
+
+
+def c_ts_paddle(case):
+    # the same wave from a piston-paddle record, without absorption
+    import timeseries_input as ti
+    ti.flat_case(case, "paddle", Hh=0.3, dx=0.04, nz=3, dt=0.01, endTime=5.0)
+
+
 CASES = {
     "standing": (c_standing, 1e-8),
     "solitary": (c_solitary, 1e-7),
@@ -97,6 +109,8 @@ CASES = {
     "kw": (c_kw, 1e-5),
     "uplift": (c_uplift, 1e-8),
     "strip": (c_strip, 1e-4),
+    "ts_eta": (c_ts_eta, 1e-6),
+    "ts_paddle": (c_ts_paddle, 1e-6),
 }
 
 

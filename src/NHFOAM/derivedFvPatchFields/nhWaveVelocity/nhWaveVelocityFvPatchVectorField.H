@@ -18,11 +18,20 @@ Class
 
 Description
     Boundary wavemaker: the velocity of a target wave (see regularWave.H:
-    linear, irregular or stream-function theory, with the return current)
-    at the face centres of a side patch, which follow the free surface of
-    the sigma mesh.  The face flux U.Sf drives the free surface of the
-    boundary columns, so the patch acts as a wave paddle whose motion is
-    the wave's own velocity profile.
+    linear, irregular or stream-function theory, with the return current,
+    or a measured time series) at the face centres of a side patch, which
+    follow the free surface of the sigma mesh.  The face flux U.Sf drives
+    the free surface of the boundary columns, so the patch acts as a wave
+    paddle whose motion is the wave's own velocity profile.
+
+    With a time series (theory timeSeries) the patch either reproduces a
+    gauge record eta(t), with the depth-uniform long-wave velocity, or moves
+    as a piston paddle with the recorded displacement X(t) (velocity dX/dt;
+    the paddle stays at its rest position, which is good for strokes small
+    against the distance to the gauges).  A record of the incident wave is
+    best used with the active absorption, so that the reflected waves leave
+    the domain; a paddle record without it (activeAbsorption no) behaves as
+    the laboratory paddle, which reflects them.
 
     With activeAbsorption the waves that reach the patch from the inside
     are let out by the shallow-water correction (Schaffer and Klopman
@@ -33,7 +42,8 @@ Description
     time level.  The celerity c_abs is sqrt(g h) (absorptionCelerity
     shallow, the default), the phase speed omega/k of the target wave
     (absorptionCelerity wave: the depth-averaged velocity of a linear wave
-    of that period is matched exactly) or a given value.  Only the
+    of that period is matched exactly; for a time series the celerity of
+    its long-wave relation) or a given value.  Only the
     deviation from the target is let out, so a patch with zero wave height
     (waveHeight 0) is an absorbing boundary.
 
@@ -56,6 +66,24 @@ Description
             depth       0.4;
             direction   (1 0 0);
             rampTime    4;
+        }
+        value            uniform (0 0 0);
+    }
+
+    // a gauge record at the patch (time [s], elevation [m])
+    inlet
+    {
+        type             nhWaveVelocity;
+        wave
+        {
+            theory      timeSeries;
+            depth       0.218;
+            eta
+            {
+                type    tableFile;
+                file    "$FOAM_CASE/constant/gauge4.dat";
+            }
+            timeShift   265;
         }
         value            uniform (0 0 0);
     }

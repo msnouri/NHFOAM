@@ -21,6 +21,7 @@ License
 #include "FixedList.H"
 #include "unitConversion.H"
 #include "error.H"
+#include "TableBase.H"
 
 using namespace Foam::constant::mathematical;
 
@@ -46,7 +47,16 @@ Foam::regularWave::regularWave
     uReturn_(Zero),
     streamFunction_(false),
     uMean_(0),
-    phase_(dict.getOrDefault<scalar>("phase", 0))
+    phase_(dict.getOrDefault<scalar>("phase", 0)),
+    timeSeries_(false),
+    paddle_(false),
+    series_(nullptr),
+    linearRelation_(false),
+    celerity_(0),
+    timeShift_(0),
+    scale_(1),
+    dtDiff_(1e-3),
+    verticalVelocity_(true)
 {
     direction_.z() = 0;
 
@@ -258,11 +268,96 @@ Foam::regularWave::regularWave
                 << exit(FatalIOError);
         }
     }
+    else if (theory == "timeSeries")
+    {
+        timeSeries_ = true;
+
+        const bool hasEta = dict.found("eta");
+        paddle_ = dict.found("paddle");
+
+        if (hasEta == paddle_)
+        {
+            FatalIOErrorInFunction(dict)
+                << "timeSeries needs either eta (a record of the surface"
+                << " elevation) or paddle (a record of the paddle"
+                << " displacement)" << exit(FatalIOError);
+        }
+
+        series_ = Function1<scalar>::New(paddle_ ? "paddle" : "eta", dict);
+
+        const word relation(dict.getOrDefault<word>("velocity", "longWave"));
+        if (relation == "linear")
+        {
+            linearRelation_ = true;
+        }
+        else if (relation != "longWave")
+        {
+            FatalIOErrorInFunction(dict)
+                << "velocity " << relation << " unknown; use longWave or"
+                << " linear" << exit(FatalIOError);
+        }
+
+        celerity_ = dict.getOrDefault<scalar>("celerity", 0);
+        timeShift_ = dict.getOrDefault<scalar>("timeShift", 0);
+        scale_ = dict.getOrDefault<scalar>("scale", 1);
+        verticalVelocity_ = dict.getOrDefault<bool>("verticalVelocity", true);
+
+        // Default step of the time derivatives: half the smallest sampling
+        // interval of a table (the slope of its linear interpolation,
+        // averaged over one interval), otherwise 1 ms
+        const auto* tablePtr =
+            dynamic_cast<const Function1Types::TableBase<scalar>*>
+            (
+                series_.get()
+            );
+
+        scalar t0 = 0, t1 = 0;
+        if (tablePtr)
+        {
+            const scalarField ts(tablePtr->x());
+            scalar dtMin = GREAT;
+            for (label i = 1; i < ts.size(); ++i)
+            {
+                if (ts[i] - ts[i-1] > SMALL)
+                {
+                    dtMin = min(dtMin, ts[i] - ts[i-1]);
+                }
+            }
+            if (dtMin < GREAT)
+            {
+                dtDiff_ = 0.5*dtMin;
+            }
+            if (ts.size())
+            {
+                t0 = ts.first();
+                t1 = ts.last();
+            }
+        }
+        dtDiff_ = dict.getOrDefault<scalar>("differenceStep", dtDiff_);
+
+        if (dtDiff_ <= 0 || (celerity_ < 0))
+        {
+            FatalIOErrorInFunction(dict)
+                << "timeSeries needs differenceStep > 0 and celerity >= 0"
+                << exit(FatalIOError);
+        }
+
+        Info<< "    time series of the "
+            << (paddle_ ? "paddle displacement" : "surface elevation")
+            << " (" << series_->type() << ")";
+        if (tablePtr)
+        {
+            Info<< ", record from " << t0 << " to " << t1 << " s";
+        }
+        Info<< ", time shift " << timeShift_ << " s, scale " << scale_
+            << ", velocity " << relation << ", difference step " << dtDiff_
+            << " s" << endl;
+    }
     else
     {
         FatalIOErrorInFunction(dict)
-            << "theory " << theory << " unknown; use linear, irregular or"
-            << " streamFunction" << exit(FatalIOError);
+            << "theory " << theory << " unknown; use linear, irregular,"
+            << " streamFunction or timeSeries" << exit(FatalIOError);
     }
 
     amp_.transfer(amp);
@@ -351,6 +446,83 @@ Foam::scalar Foam::regularWave::theta(const point& x, const scalar t) const
 }
 
 
+Foam::scalar Foam::regularWave::recordTime
+(
+    const point& x,
+    const scalar t
+) const
+{
+    // The record holds at the origin; elsewhere it arrives after the
+    // travel time of a long wave along the direction
+    const scalar c0 = celerity_ > 0 ? celerity_ : Foam::sqrt(g_*h_);
+
+    return t + timeShift_ - ((x - origin_) & direction_)/c0;
+}
+
+
+Foam::scalar Foam::regularWave::velocityFromEta(const scalar eta) const
+{
+    if (linearRelation_)
+    {
+        return eta*Foam::sqrt(g_/h_);
+    }
+
+    // Flux c eta through the depth h + eta (kept positive)
+    const scalar D = max(h_ + eta, 0.01*h_);
+    const scalar c = celerity_ > 0 ? celerity_ : Foam::sqrt(g_*D);
+
+    return c*eta/D;
+}
+
+
+Foam::scalar Foam::regularWave::etaFromVelocity(const scalar u) const
+{
+    if (linearRelation_)
+    {
+        return u*Foam::sqrt(h_/g_);
+    }
+
+    if (celerity_ > 0)
+    {
+        // u = c eta/(h + eta)
+        return u*h_/max(celerity_ - u, 0.01*celerity_);
+    }
+
+    // u = eta sqrt(g/(h + eta)): g eta^2 - u^2 eta - u^2 h = 0, the root
+    // with the sign of u
+    const scalar u2 = sqr(u);
+    const scalar root = Foam::sqrt(sqr(u2) + 4*g_*h_*u2);
+
+    return (u2 + (u < 0 ? -root : root))/(2*g_);
+}
+
+
+Foam::scalar Foam::regularWave::seriesEta(const scalar tau) const
+{
+    if (paddle_)
+    {
+        return etaFromVelocity(seriesVelocity(tau));
+    }
+
+    return scale_*series_->value(tau);
+}
+
+
+Foam::scalar Foam::regularWave::seriesVelocity(const scalar tau) const
+{
+    if (paddle_)
+    {
+        // Paddle velocity: central difference of the displacement
+        return
+            scale_
+           *(series_->value(tau + dtDiff_) - series_->value(tau - dtDiff_))
+           /(2*dtDiff_);
+    }
+
+    return velocityFromEta(seriesEta(tau));
+}
+
+
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 Foam::scalar Foam::regularWave::ramp(const scalar t) const
@@ -368,8 +540,24 @@ Foam::scalar Foam::regularWave::ramp(const scalar t) const
 }
 
 
+Foam::scalar Foam::regularWave::phaseSpeed() const
+{
+    if (timeSeries_ || k_ <= 0)
+    {
+        return celerity_ > 0 ? celerity_ : Foam::sqrt(g_*h_);
+    }
+
+    return omega_/k_;
+}
+
+
 Foam::scalar Foam::regularWave::eta(const point& x, const scalar t) const
 {
+    if (timeSeries_)
+    {
+        return ramp(t)*seriesEta(recordTime(x, t));
+    }
+
     if (streamFunction_)
     {
         const scalar th = theta(x, t);
@@ -399,6 +587,28 @@ Foam::vector Foam::regularWave::velocity(const point& x, const scalar t) const
     // Height above the bottom, limited to the water column
     const scalar zb = max(x.z() - swl_ + h_, 0);
     const scalar r = ramp(t);
+
+    if (timeSeries_)
+    {
+        const scalar tau = recordTime(x, t);
+        const scalar u = seriesVelocity(tau);
+
+        // Continuity for a wave of permanent form travelling along the
+        // direction at the celerity c: w = -z_b du/dx = (z_b/c) du/dt
+        scalar w = 0;
+        if (verticalVelocity_)
+        {
+            const scalar dudt =
+                (seriesVelocity(tau + dtDiff_) - seriesVelocity(tau - dtDiff_))
+               /(2*dtDiff_);
+            const scalar D = max(h_ + seriesEta(tau), 0.01*h_);
+            const scalar c = celerity_ > 0 ? celerity_ : Foam::sqrt(g_*D);
+
+            w = min(zb, D)*dudt/c;
+        }
+
+        return r*(u*direction_ + vector(0, 0, w));
+    }
 
     if (streamFunction_)
     {
