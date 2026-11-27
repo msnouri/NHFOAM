@@ -119,6 +119,15 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         models. A new option writes the free surface
         of every column at listed times, for shorelines without full field
         output.
+  \item \textbf{A mesh refined where it matters.} On a quadrilateral mesh
+        with 0.7 cm cells in the Monai valley only (22\,455 columns, fewer
+        than the uniform 2.8 cm grid) the run-up at the head of the valley
+        is 8.1 cm, inside the measured range, in 22 min on two cores; the
+        uniform 1.4 cm grid gives 7.4 cm in 6.2 h. With the same
+        resolution on the shelf and in the valley the refined mesh
+        reproduces the uniform grid within 0.3 cm. The run-up still rises,
+        to 8.5 cm, with 0.35 cm cells; the film thickness (0.5--2 mm) does
+        not change it.
   \item \textbf{Long runs.} The drift of the phase over the submerged bar
         (0.21 s in 20 s) came from the missing return current of the
         wave-making zone. With the return current, now the default, or the
@@ -149,7 +158,8 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         structured mesh and the backwash slower. A narrow cell at the
         shoreline raises the errors, and so does a valley only a few cells
         wide: at the head of the Monai valley the run-up is 17\% below the
-        measured mean on the benchmark grid. It needs the interface
+        measured mean on the benchmark grid, and it takes 0.7 cm cells
+        there to reach the measured range. It needs the interface
         pressure layout.
   \item \textbf{Breaking} has been tested on two spilling-breaker beaches
         and the longshore current. With the eddy viscosity the decay inside

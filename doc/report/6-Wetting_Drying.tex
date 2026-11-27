@@ -10,8 +10,8 @@ still water against a dry beach, the oscillation in a parabolic basin of
 \citet{thacker1981} and a dam break on a dry bed (verification), and the
 run-up of a breaking solitary wave \citep{synolakis1987}, the solitary waves
 on a conical island of \citet{briggs1995}, the tsunami run-up in the Monai
-valley \citep{matsuyama2001} and the spilling breakers of \citet{ting1994}
-(validation, with NHWAVE).
+valley \citep{matsuyama2001}, also on meshes refined around the valley, and
+the spilling breakers of \citet{ting1994} (validation, with NHWAVE).
 
 \subsection{Method}
 \label{sec:wd-method}
@@ -556,6 +556,99 @@ the six repeats).}
 of the experiment ($t = 15.3$--17.3 s, as the benchmark gives them). At
 15.3 s NHWAVE's shoreline still lies seaward of the frame ($x < 4.7$ m).}
 \label{fig:wd-monai-frames}
+\end{figure}
+
+\subsection{The Monai valley on a mesh refined around the valley}
+\label{sec:wd-monai-ref}
+
+On the uniform grids the run-up at the head of the valley stays 17\%
+(1.4 cm) to 27\% (2.8 cm) below the measured mean. The valley narrows to
+4--6 cm there, and a uniform grid pays for the resolution of the valley over
+the whole basin. NHWAVE has no other choice; \NHFOAM\ takes any mesh that is
+made of columns (Section~\ref{sec:unstr}). Here the basin is meshed with
+gmsh quadrilaterals whose size follows the depth, $5.6\sqrt{h/d}$ cm down to
+2.8 cm in the shallow water and on the land that the wave can reach, with
+smaller cells in a box of $0.45 \times 0.7$ m around the valley and the three
+lab points and, as an option, on the shelf in front of it ($1.3 \times 1.5$
+m, with the gauges), extruded into 4 layers (Fig.~\ref{fig:wd-monai-ref}a).
+Everything else is the set-up of Section~\ref{sec:wd-monai}. The time step
+follows the Courant number (at most 1) below 8 ms, the step of the uniform
+2.8 cm grid, so the small cells cost time steps only while water moves
+through them: the smallest step is 2--4 ms and the runs take 3150--3530
+steps. The bed is still the bilinear interpolation of the 1.4 cm benchmark
+data, so cells below 1.4 cm add numerical resolution and no detail of the
+bed.
+
+\begin{table}[htbp]
+\centering
+\caption{Monai valley on uniform grids and on meshes refined around the
+valley: run-up at the head of the valley and at the two points to its north
+(N1, N2), the highest flooded ground in the valley and the run time on two
+cores.}
+\label{tab:wd-monai-ref}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrrr}
+\toprule
+mesh & columns & steps & \multicolumn{3}{c}{run-up [cm]} & valley & time \\
+\cmidrule(lr){4-6}
+ & & & head & N1 & N2 & [cm] & \\
+\midrule
+lab, range & & & 8.0--10.0 & 5.25--6.75 & 5.25--5.75 & & \\
+lab, mean & & & 9.0 & 6.0 & 5.6 & & \\
+uniform 2.8 cm & 23\,912 & 3125 & 6.6 & 4.3 & 4.3 & 6.9 & 35 min \\
+uniform 1.4 cm & 95\,256 & 6250 & 7.4 & 5.4 & 4.4 & 7.5 & 6.2 h \\
+valley 1.4 cm & 16\,883 & 3150 & 7.0 & 4.7 & 4.3 & 7.4 & 16 min \\
+shelf and valley 1.4 cm & 22\,962 & 3163 & 7.1 & 5.8 & 4.7 & 7.8 & 22 min \\
+valley 0.7 cm & 22\,455 & 3264 & 8.1 & 5.7 & 4.9 & 8.3 & 22 min \\
+shelf 1.4 cm, valley 0.7 cm & 28\,279 & 3282 & 8.1 & 5.6 & 5.1 & 8.2 & 28 min \\
+valley 0.7 cm, head 0.35 cm & 24\,897 & 3528 & 8.5 & 5.8 & 5.1 & 8.5 & 27 min \\
+valley 0.7 cm, triangles & 52\,929 & 3891 & 8.3 & 5.6 & 5.3 & 8.3 & 64 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The resolution of the valley decides the run-up
+(Table~\ref{tab:wd-monai-ref}, Fig.~\ref{fig:wd-monai-ref}). With 0.7 cm
+cells in the valley the run-up at the head is 8.1 cm, inside the measured
+8.0--10.0 cm, and 5.7 cm at N1 (measured 5.25--6.75 cm); N2 stays 12\% below
+the measured mean. That mesh has fewer columns than the uniform 2.8 cm grid
+and ran in 22 min, against 6.2 h for the uniform 1.4 cm grid, which gives
+7.4 cm: a quarter of the columns and, with the adaptive step that the
+uniform runs did not use, half the time steps. With 1.4 cm on the shelf and
+in the valley the refined mesh gives the run-up of the uniform 1.4 cm grid
+within 0.3 cm at the three points and its crests at the gauges ($+21$, $+17$
+and $+25\%$ against $+21$, $+24$ and $+29\%$). Meshes of the same nominal
+resolution differ by 0.1--0.3 cm at a point, as the run-up is read from the
+bed height of single columns.
+
+The shelf matters for the gauges and not for the head of the valley: with
+0.7 cm in the valley, the shelf at 1.4 cm instead of 2.8 cm leaves the
+run-up at the head at 8.1 cm, while on every refined mesh the bore reaches
+the gauges within 0.04 s of the uniform grid with the same resolution on the
+shelf, with the same rms differences (0.50--0.60 cm). The run-up at the head
+is not yet converged: with 0.35 cm cells there ($0.32 \times 0.22$ m) it
+rises again, to 8.5 cm, so that from 2.8 to 0.35 cm it goes 6.6, 7.0--7.4,
+8.1 and 8.5 cm (lab mean 9.0 cm).
+The same mesh in triangles (edges of the same length, so 2.4 times the
+columns) runs up 8.3, 5.6 and 5.3 cm, within 0.4 cm of the
+quadrilaterals' 8.1, 5.7 and 4.9 cm, with the same gauges, at three
+times the cost; the 8\% lower run-up of the triangulated strip of
+Section~\ref{sec:unstr} does not show here.
+The film is not the limit: on the uniform 2.8 cm grid, films of 2, 1 and
+0.5 mm give the same run-up at all three points and crests within 5\% of
+each other; with the thinner films the bore reaches
+gauge 5 0.15 s earlier and gauge 9 0.07--0.11 s later.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{monai_valley_refined.pdf}
+\caption{Monai valley on a mesh refined around the valley: (a) the mesh with
+0.7 cm cells in the valley; (b) the mesh in the valley, the edge of the
+flooded area and the points of the measured run-up; (c) the highest flooded
+ground along the valley against the measured run-up (range of the six
+repeats).}
+\label{fig:wd-monai-ref}
 \end{figure}
 
 \subsection{Spilling breakers on a 1:35 beach}

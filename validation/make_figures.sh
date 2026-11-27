@@ -29,6 +29,7 @@
 #   CB   : the composite beach (composite_beach.py: nf_<A|B|C>_<gauge4|
 #          paddle|solitary>, nw_<A|B|C>)
 #   MV   : the Monai valley (monai_valley.py <dir>: nf_14, nf_28, nw_28)
+#          and its refined meshes (monai_refined.py <dir>: nr_07, nr_035)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -203,3 +204,9 @@ python3 plot_composite_beach.py $OUT/composite_beach_gauges.png $CB
 # Run-up onto a complex 3D beach, the Monai valley (NTHMP benchmark 7)
 python3 plot_monai_valley.py $OUT/monai_valley $MV/nf_14:"NHFOAM, 1.4 cm" \
     $MV/nf_28:"NHFOAM, 2.8 cm" $MV/nw_28:"NHWAVE, 2.8 cm"
+
+# The Monai valley on a mesh refined around the valley
+python3 plot_monai_refined.py $OUT/monai_valley_refined $MV/nr_07 \
+    $MV/nf_28:"uniform 2.8 cm" $MV/nf_14:"uniform 1.4 cm" \
+    $MV/nr_07:"refined, 0.7 cm in the valley" \
+    $MV/nr_035:"refined, 0.35 cm at the head"

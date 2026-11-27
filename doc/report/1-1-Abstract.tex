@@ -76,7 +76,10 @@ a tsunami ran up a narrow valley, the benchmark's incident wave drives the
 boundary wavemaker directly: on the same grid the two models flood the same
 ground and follow the measured gauges to 0.5--0.6 cm rms, NHWAVE's bore
 arriving 0.3--0.4 s late, and on the benchmark grid \NHFOAM's run-up at the
-head of the valley is 7.4 cm against 8.0--10.0 cm measured. Restarts are
+head of the valley is 7.4 cm against 8.0--10.0 cm measured. On a mesh refined
+to 0.7 cm in the valley only, with fewer columns than the grid twice as
+coarse as the benchmark's, it is 8.1 cm, in 22 min against 6.2 h.
+Restarts are
 exact, parallel runs reproduce serial ones with breakers across processor
 boundaries, and a regression suite guards both.
 

@@ -1140,7 +1140,8 @@ now comparable.
 ### 5.8 Unstructured meshes
 
 `validation/unstructured.py` builds the meshes with gmsh (triangles extruded
-into prisms), `plot_unstructured.py` makes the figures.
+into prisms), `plot_unstructured.py` makes the figures. A 3D run-up case on
+unstructured quadrilaterals, refined where the flow needs it, is in 6.12.
 
 **Run-up on a triangulated strip.** The breaking solitary wave of 6.6
 (H/d = 0.28, HFA, 5 mm film, no friction, 3 layers) on a 10 cm wide strip
@@ -1222,6 +1223,7 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | (NHWAVE example, NTHMP 6) solitary waves on a conical island | Briggs et al. (1995) | 6.9 |
 | (NTHMP 5, in NHWAVE's benchmark report) solitary waves on a composite beach with a wall | Yeh et al. (1996) | 6.10 |
 | (NHWAVE example, NTHMP 7) tsunami run-up in the Monai valley | Matsuyama & Tanaka (2001) | 6.11 |
+| the same on meshes refined around the valley (NHFOAM only) | Matsuyama & Tanaka (2001) | 6.12 |
 
 Three of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, the solitary wave that
@@ -1938,10 +1940,80 @@ on 2 cores:
 - **Cost.** On the coarse grid NHFOAM took 35 min and NHWAVE 2.0 h on 2
   cores (1.7 h without k–ε); NHFOAM took 6.2 h on the benchmark grid.
 
+### 6.12 The Monai valley on a mesh refined around the valley
+
+![Monai valley, refined mesh](doc/figures/monai_valley_refined.png)
+
+On the uniform grids of 6.11 the run-up at the head of the valley stays 17%
+(1.4 cm) to 27% (2.8 cm) below the measured mean: the valley narrows to
+4–6 cm there, and a uniform grid pays for the resolution of the valley over
+the whole basin. NHWAVE has no other choice, NHFOAM takes any mesh that is
+made of columns. `validation/monai_refined.py` meshes the basin with gmsh
+quadrilaterals whose size follows the depth, lc = 5.6 cm √(h/d) down to
+2.8 cm in the shallow water and on the land that the wave can reach, with
+smaller cells in a box of 0.45 × 0.7 m around the valley and the three lab
+points (and, as an option, on the shelf in front of it, 1.3 × 1.5 m, which
+holds the gauges), and extrudes them into 4 layers.
+`plot_monai_refined.py` makes the figure. Everything else is the set-up of
+6.11. The time step follows the Courant number (`adjustTimeStep`,
+maxCo = 1) below 8 ms, the step of the uniform 2.8 cm grid, so the small
+cells cost time steps only while water moves through them (smallest step
+2–4 ms, 3150–3530 steps in all). The bed is still the bilinear
+interpolation of the 1.4 cm benchmark data: cells below 1.4 cm add numerical
+resolution and no detail of the bed. Run-up as in 6.11 (the highest flooded
+ground in a 1.4 cm wide strip through each lab point), in cm:
+
+| mesh | columns | time steps | head of the valley | N1 (5.030, 2.206) | N2 (4.998, 2.320) | highest in the valley | time, 2 cores |
+|---|---|---|---|---|---|---|---|
+| lab, range | | | 8.0–10.0 | 5.25–6.75 | 5.25–5.75 | | |
+| lab, mean | | | 9.0 | 6.0 | 5.6 | | |
+| uniform 2.8 cm (6.11) | 23 912 | 3125 | 6.6 | 4.3 | 4.3 | 6.9 | 35 min |
+| uniform 1.4 cm (6.11) | 95 256 | 6250 | 7.4 | 5.4 | 4.4 | 7.5 | 6.2 h |
+| refined: valley 1.4 cm | 16 883 | 3150 | 7.0 | 4.7 | 4.3 | 7.4 | 16 min |
+| refined: shelf and valley 1.4 cm | 22 962 | 3163 | 7.1 | 5.8 | 4.7 | 7.8 | 22 min |
+| refined: valley 0.7 cm | 22 455 | 3264 | 8.1 | 5.7 | 4.9 | 8.3 | 22 min |
+| refined: shelf 1.4 cm, valley 0.7 cm | 28 279 | 3282 | 8.1 | 5.6 | 5.1 | 8.2 | 28 min |
+| refined: valley 0.7 cm, head 0.35 cm | 24 897 | 3528 | 8.5 | 5.8 | 5.1 | 8.5 | 27 min |
+| refined: valley 0.7 cm, triangles | 52 929 | 3891 | 8.3 | 5.6 | 5.3 | 8.3 | 64 min |
+
+- **Resolution of the valley decides the run-up.** With 0.7 cm cells in the
+  valley the run-up at the head is 8.1 cm, inside the measured 8.0–10.0 cm,
+  and 5.7 cm at N1 (measured 5.25–6.75 cm); N2 stays 12% below the measured
+  mean (4.9 cm; lowest repeat 5.25 cm). That mesh has fewer columns than the
+  uniform 2.8 cm grid and ran in 22 min, against 6.2 h for the uniform
+  1.4 cm grid, which gives 7.4 cm: a quarter of the columns and, with the
+  adaptive step that the uniform runs did not use, half the time steps.
+- **Same resolution, same answer.** With 1.4 cm on the shelf and in the
+  valley the refined mesh gives the run-up of the uniform 1.4 cm grid
+  within 0.3 cm at the three points (7.1 / 5.8 / 4.7 against 7.4 / 5.4 /
+  4.4 cm) and its crests at the gauges (+21 / +17 / +25% against +21 / +24 /
+  +29%), with a quarter of the columns. Meshes of the same nominal
+  resolution differ by 0.1–0.3 cm at a point: the run-up is read from the
+  bed height of single columns.
+- **The shelf matters for the gauges, not for the head of the valley.**
+  With 0.7 cm in the valley, the shelf at 1.4 cm instead of 2.8 cm leaves
+  the run-up at the head at 8.1 cm. The gauges follow the resolution of the
+  shelf: on every refined mesh the bore arrives within 0.04 s of the uniform
+  grid of the same shelf resolution, and the rms differences (0.50–0.60 cm)
+  do not change.
+- **Not yet converged at the head.** With 0.35 cm cells at the head of the
+  valley (0.32 × 0.22 m) the run-up there rises again, to 8.5 cm (lab mean
+  9.0 cm); from 2.8 to 0.35 cm it goes 6.6, 7.0–7.4, 8.1, 8.5 cm.
+- **Triangles give the same run-up at three times the cost.** The 0.7 cm
+  mesh in triangles (edges of the same length, so 2.4 times the columns)
+  runs up 8.3 / 5.6 / 5.3 cm, within 0.4 cm of the quadrilaterals'
+  8.1 / 5.7 / 4.9 cm, with the same gauges, in 64 min. The
+  8% lower run-up of the triangulated strip of 5.8 does not show here.
+- **The film is not the limit.** On the uniform 2.8 cm grid, films of 2, 1
+  and 0.5 mm give the same run-up at all three points and crests within 5%
+  of each other; with the thinner films the bore
+  reaches gauge 5 0.15 s earlier (0.21 s after the measured one instead of
+  0.36 s) and gauge 9 0.07–0.11 s later.
+
 ## 7. Limitations (this version)
 
 - **Wetting and drying** has been tested in 2DV, on triangulated strips,
-  around a conical island (6.9) and in the Monai valley (6.11).
+  around a conical island (6.9) and in the Monai valley (6.11, 6.12).
   The film acts as a wet bed (in NHWAVE too), so thin swash flows run slower
   than over a truly dry bed, and puddles of a few millimetres above the film
   stay on the beach in the backwash; on triangles the run-up is 8% lower
@@ -1949,7 +2021,10 @@ on 2 cores:
   at the shoreline raises the errors, and so does a valley only a few cells
   wide: at the head of the Monai valley the run-up is 17% below the
   measured mean on the benchmark grid and 27% on a grid twice as coarse.
-  It needs the interface pressure.
+  It takes 0.7 cm cells in the valley, on a mesh refined there, to bring it
+  into the measured range, and it still rises with 0.35 cm cells (6.12).
+  The film thickness is not the limit there. It needs the interface
+  pressure.
 - **Breaking.** Tested on two spilling-breaker beaches and the longshore
   current (6.7, 6.8). With the eddy viscosity the decay inside the surf zone
   is close to the measured one, but just after the breaking point the waves
@@ -2008,7 +2083,8 @@ wetting and drying (6.9). Then measured records as wave input
 (`theory timeSeries`: gauge and paddle records, 5.7) with the composite
 beach of NTHMP benchmark 5 (6.10). Then free-surface snapshots at listed
 times (`surfaceSnapshots`) with the tsunami run-up in the Monai valley of
-NTHMP benchmark 7 (6.11).
+NTHMP benchmark 7 (6.11), and that valley on quadrilateral meshes refined
+around it, with the adaptive time step (6.12).
 
 Next:
 
