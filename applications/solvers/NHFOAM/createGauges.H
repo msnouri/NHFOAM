@@ -79,3 +79,45 @@ if (gaugePoints.size() && Pstream::master())
     }
     os  << endl;
 }
+
+
+// Free-surface snapshots: x, y, bed and eta of every column at the end of the
+// time step nearest to each listed time, written to
+// postProcessing/surface/<time>.dat by the master (the free surface of
+// NHWAVE's field output, without writing the full fields)
+//
+//     surfaceSnapshots (15.3 15.8 16.3);
+
+scalarList snapshotTimes
+(
+    nhProperties.getOrDefault<scalarList>("surfaceSnapshots", scalarList())
+);
+Foam::sort(snapshotTimes);
+
+label nextSnapshot = 0;
+while
+(
+    nextSnapshot < snapshotTimes.size()
+ && snapshotTimes[nextSnapshot] < runTime.value()
+)
+{
+    ++nextSnapshot;
+}
+
+fileName snapshotDir;
+
+if (snapshotTimes.size())
+{
+    snapshotDir =
+    (
+        Pstream::parRun() ? runTime.path()/".." : runTime.path()
+    )/"postProcessing"/"surface";
+
+    if (Pstream::master())
+    {
+        mkDir(snapshotDir);
+    }
+
+    Info<< "Free-surface snapshots at " << snapshotTimes.size() - nextSnapshot
+        << " times in postProcessing/surface" << nl << endl;
+}

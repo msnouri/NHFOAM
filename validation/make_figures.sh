@@ -28,6 +28,7 @@
 #          ts_<exact|eta|etaC|paddle>_<10|30>)
 #   CB   : the composite beach (composite_beach.py: nf_<A|B|C>_<gauge4|
 #          paddle|solitary>, nw_<A|B|C>)
+#   MV   : the Monai valley (monai_valley.py <dir>: nf_14, nf_28, nw_28)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -48,6 +49,7 @@ LS=${LS:-/home/claude/runs_ls}
 CI=${CI:-/home/claude/runs_ci}
 TS=${TS:-/home/claude/runs_ts}
 CB=${CB:-/home/claude/runs_cb}
+MV=${MV:-/home/claude/runs_mv}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -197,3 +199,7 @@ python3 plot_conical_island.py $OUT/conical_island_gauges.png \
 # benchmark 5)
 python3 plot_timeseries_input.py $OUT/timeseries_input.png $TS
 python3 plot_composite_beach.py $OUT/composite_beach_gauges.png $CB
+
+# Run-up onto a complex 3D beach, the Monai valley (NTHMP benchmark 7)
+python3 plot_monai_valley.py $OUT/monai_valley $MV/nf_14:"NHFOAM, 1.4 cm" \
+    $MV/nf_28:"NHFOAM, 2.8 cm" $MV/nw_28:"NHWAVE, 2.8 cm"

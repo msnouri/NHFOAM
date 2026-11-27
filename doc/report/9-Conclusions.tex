@@ -103,6 +103,22 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         boundary column falls 14\% short of the recorded crest. With the
         same input and grid \NHFOAM\ and NHWAVE agree within 2\% (case A)
         and 6\% (case B).
+  \item \textbf{Run-up in a narrow valley.} In the Monai valley of NTHMP
+        benchmark 7 the benchmark's incident wave drives the boundary
+        wavemaker directly. On the same grid (2.8 cm) \NHFOAM\ and NHWAVE
+        flood the same ground and run up 6.6 cm at the head of the valley,
+        against 8.0--10.0 cm measured; on the benchmark grid (1.4 cm)
+        \NHFOAM\ reaches 7.4 cm. Both follow the measured gauges to
+        0.5--0.6 cm rms. The gauges stand in shallower water in the bed
+        file than they did in the experiment and dry out in the models;
+        NHWAVE's bore then arrives 0.3--0.4 s late, \NHFOAM's 0.03--0.39 s,
+        and \NHFOAM's short crests are 13--29\% too high, with or without
+        its breaking model. Neither \NHFOAM's breaking model nor NHWAVE's
+        $k$--$\varepsilon$ model changes the run-up or the timing: the
+        bores run over the dried bed at different speeds in the two
+        models. A new option writes the free surface
+        of every column at listed times, for shorelines without full field
+        output.
   \item \textbf{Long runs.} The drift of the phase over the submerged bar
         (0.21 s in 20 s) came from the missing return current of the
         wave-making zone. With the return current, now the default, or the
@@ -125,13 +141,16 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 \paragraph{Limitations.}
 \begin{itemize}[nosep]
   \item \textbf{Wetting and drying} has been tested in 2DV, on
-        triangulated strips and around a conical island. The film acts as a wet bed, so thin swash flows
+        triangulated strips, around a conical island and in the Monai
+        valley. The film acts as a wet bed, so thin swash flows
         run slower than over a truly dry bed (in NHWAVE as well), and
         puddles of a few millimetres above the film stay on the beach in
         the backwash; on triangles the run-up is 8\% lower than on the
         structured mesh and the backwash slower. A narrow cell at the
-        shoreline raises the errors. It needs the interface pressure
-        layout.
+        shoreline raises the errors, and so does a valley only a few cells
+        wide: at the head of the Monai valley the run-up is 17\% below the
+        measured mean on the benchmark grid. It needs the interface
+        pressure layout.
   \item \textbf{Breaking} has been tested on two spilling-breaker beaches
         and the longshore current. With the eddy viscosity the decay inside
         the surf zone is close to the measured one, but just after the

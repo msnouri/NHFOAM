@@ -158,4 +158,52 @@
             os  << endl;
         }
     }
+
+    // Free-surface snapshots (createGauges.H)
+    if
+    (
+        nextSnapshot < snapshotTimes.size()
+     && runTime.value()
+      > snapshotTimes[nextSnapshot] - 0.5*runTime.deltaTValue()
+    )
+    {
+        while
+        (
+            nextSnapshot < snapshotTimes.size()
+         && runTime.value()
+          > snapshotTimes[nextSnapshot] - 0.5*runTime.deltaTValue()
+        )
+        {
+            ++nextSnapshot;
+        }
+
+        List<vectorField> allC(Pstream::nProcs());
+        List<scalarField> allZb(Pstream::nProcs());
+        List<scalarField> allEta(Pstream::nProcs());
+        allC[Pstream::myProcNo()] = columns.columnCentre();
+        allZb[Pstream::myProcNo()] = columns.columnBottomZ();
+        allEta[Pstream::myProcNo()] = etaCol;
+        Pstream::gatherList(allC);
+        Pstream::gatherList(allZb);
+        Pstream::gatherList(allEta);
+
+        if (Pstream::master())
+        {
+            OFstream os(snapshotDir/(runTime.timeName() + ".dat"));
+            os.precision(8);
+            os  << "# Free surface of the columns at t = " << runTime.value()
+                << " s" << nl << "# x y zb eta" << nl;
+            forAll(allC, proci)
+            {
+                forAll(allC[proci], coli)
+                {
+                    os  << allC[proci][coli].x() << ' '
+                        << allC[proci][coli].y() << ' '
+                        << allZb[proci][coli] << ' '
+                        << allEta[proci][coli] << nl;
+                }
+            }
+        }
+        Info<< "Free-surface snapshot at t = " << runTime.value() << endl;
+    }
 }

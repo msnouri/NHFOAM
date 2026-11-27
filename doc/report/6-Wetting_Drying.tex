@@ -9,8 +9,9 @@ surface and the collocated mesh, compares the two treatments, and tests them:
 still water against a dry beach, the oscillation in a parabolic basin of
 \citet{thacker1981} and a dam break on a dry bed (verification), and the
 run-up of a breaking solitary wave \citep{synolakis1987}, the solitary waves
-on a conical island of \citet{briggs1995} and the spilling breakers of
-\citet{ting1994} (validation, with NHWAVE).
+on a conical island of \citet{briggs1995}, the tsunami run-up in the Monai
+valley \citep{matsuyama2001} and the spilling breakers of \citet{ting1994}
+(validation, with NHWAVE).
 
 \subsection{Method}
 \label{sec:wd-method}
@@ -382,6 +383,179 @@ gauge 2.}
 \caption{Solitary waves on a conical island: run-up around the island
 ($0^\circ$ at gauge 16, $90^\circ$ behind the island, $270^\circ$ in front).}
 \label{fig:wd-island-runup}
+\end{figure}
+
+\subsection{Tsunami run-up in the Monai valley}
+\label{sec:wd-monai}
+
+The 1993 Hokkaido Nansei-Oki tsunami ran up 31.7 m at the head of a narrow
+valley near Monai, on Okushiri Island. \citet{matsuyama2001} rebuilt the
+coast at 1:400 in a 205 m long, 3.5 m wide tank of the Central Research
+Institute for Electric Power Industry. The experiment was benchmark 2 of the
+2004 workshop on long-wave run-up models \citep{liu2008}; it is benchmark 7
+of the NTHMP \citep{synolakis2008} and one of NHWAVE's examples
+(\code{Runup\_onto\_a\_complex\_3-D\_beach\_Monai\_Valley}). The benchmark
+covers $5.488 \times 3.402$ m with the bed on a 1.4 cm grid: 13.5 cm of water
+at $x = 0$, a small island in front of the valley, land up to 12.5 cm above
+the still water, and walls on the other three sides. The incident wave is
+given at $x = 0$ for 22.5 s, a depression of 2.9 mm followed by a crest of
+16.1 mm ($H/d = 0.12$). Gauges 5, 7 and 9 recorded the water level at
+$x = 4.521$ m, where the bed file has only 1.2, 0.3 and 0.6 cm of water. In
+six repeats the wave ran up 8.0--10.0 cm (mean 9.0 cm) at the head of the
+valley, which narrows to 4--6 cm there, and 5.25--6.75 and 5.25--5.75 cm at
+two points on its north side.
+
+\NHFOAM\ covers the benchmark domain and takes the incident wave at $x = 0$
+as a time series (Section~\ref{sec:ts}) with the active absorption, so that
+the boundary lets the reflected waves out, also after 22.5 s, when the
+record (tapered to zero over its last 0.5 s) ends. The velocity is uniform
+over the depth, $u = c\eta/(d+\eta)$ with $c = \sqrt{g(d+\eta)}$. NHWAVE runs
+its example: the domain extended 1.4 m offshore, its internal wavemaker
+between $x = -0.14$ and 0 m driven by a Fourier fit of the record (399
+components), a 1 m sponge behind it and its $k$--$\varepsilon$ model. Both
+models use 4 layers, log-law friction with a roughness of 0.1 mm (NHWAVE's
+\code{Zob}) and NHWAVE's 2 mm film; \NHFOAM\ runs its hybrid breaking model.
+\NHFOAM\ runs on the benchmark grid (1.4 cm, $392\times243$ columns) and on
+the grid coarsened twice (2.8 by 2.79 cm, $196\times122$ columns). On the
+benchmark grid NHWAVE takes about 10 s per time step on two cores, about
+16 h for the 25 s, so it runs on the coarse grid, with the bed interpolated from the
+benchmark nodes and the cell depths the means of the four corners, as
+NHWAVE's own depth file has them on the fine grid. On the coarse grid each
+model also runs without its breaking treatment (\NHFOAM\ without the
+breaking model, NHWAVE without $k$--$\varepsilon$). No run is shifted in
+time, and the measured records are shown as given (they read $+2$ to $+5$
+mm before the wave arrives). The run-up is the highest ground that a model
+floods (the highest bed among the columns that were ever wet), which is how
+it was measured: the ground at the three lab points is 8.9, 6.2 and 5.5 cm
+high, their mean run-ups. The shorelines at the times of the video frames
+of the experiment come from the new \NHFOAM\ option
+\code{surfaceSnapshots}, which writes the free surface of every column at
+listed times without the full fields, and from NHWAVE's surface output every
+0.1 s; the photographs themselves were not compared.
+
+On both grids \NHFOAM's first column follows the record to 0.2 mm rms over
+the first 12 s, before the waves reflected from the island and the coast
+come back (Fig.~\ref{fig:wd-monai}a). NHWAVE's wavemaker keeps time with the
+record too (lag 0.001 s), with a deeper depression (3.5 against 2.9 mm) and
+a 2\% lower crest (0.6 mm rms). After 12 s both boundaries let the same
+reflected waves out.
+
+The depression dries all three gauge columns in both models (the flat parts
+of Fig.~\ref{fig:wd-monai} at 12--15 s), while the measured records stay wet:
+gauge 7 reads 0.6 cm below the still water at 14 s, where the bed file puts
+the bed at $-0.27$ cm, so the gauges stood in deeper water than the file has
+at their positions. The bore then floods the dried bed. \NHFOAM's arrives
+0.03--0.39 s after the measured one on both grids, NHWAVE's 0.30--0.40 s,
+about the 0.4 s by which NHWAVE's example shifts its results
+(Table~\ref{tab:wd-monai}). Behind the bore both models follow the measured
+records, with rms differences of 0.5--0.6 cm. \NHFOAM's short crests at
+17--17.6 s are 13--18\% higher than the measured ones on the coarse grid and
+21--29\% on the benchmark grid; NHWAVE's smoother crests are 1--5\% lower.
+
+On the coarse grid the two models flood almost the same columns (0.64 and
+0.63 m$^2$ of land; \NHFOAM\ floods every column that NHWAVE floods) and run
+up 6.6 cm at the head of the valley, 27\% below the measured mean, and
+4.3 cm at the two points to the north, 23--29\% low
+(Fig.~\ref{fig:wd-monai-runup}, Table~\ref{tab:wd-monai-runup}): the head of
+the valley is only one or two coarse cells wide. On the benchmark grid
+\NHFOAM\ runs up 7.4 cm at the head (17\% low, below the lowest of the six
+repeats), 5.4 cm at the first point to the north (within the measured
+5.25--6.75 cm) and 4.4 cm at the second (21\% low). The shorelines of the two
+grids agree at the times of the video frames (Fig.~\ref{fig:wd-monai-frames});
+NHWAVE's lags behind \NHFOAM's while the water climbs the valley (by 0.27 m
+at 15.3 s and 0.17 m at 15.8 s) and has caught up by 16.8 s.
+
+Without its breaking model \NHFOAM's crest at gauge 5 is 9\% higher (4.70
+against 4.31 cm), and the bore, the rms differences and the run-up do not
+change. Without $k$--$\varepsilon$ NHWAVE's crests are 1--3\% higher and its
+bore arrives 0.02 s earlier, with the same run-up. Neither closure explains
+the differences between the models: with or without them NHWAVE's bore
+reaches gauges 7 and 9 0.3 s after \NHFOAM's, and \NHFOAM's short crests
+stay 11--29\% above NHWAVE's. The difference lies in how the bore runs over
+the dried bed: NHWAVE's shoreline also lags behind \NHFOAM's while the water
+climbs the valley.
+On the coarse grid \NHFOAM\ took 35 min and NHWAVE 2.0 h on two cores
+(1.7 h without $k$--$\varepsilon$); \NHFOAM\ took 6.2 h on the benchmark
+grid.
+
+\begin{table}[htbp]
+\centering
+\caption{Monai valley, gauges over 13--23 s: highest crest against the
+measured one, arrival of the bore ($\eta$ rising through 0.5 cm) against the
+measured arrival, and rms difference.}
+\label{tab:wd-monai}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+run & \multicolumn{3}{c}{crest} & \multicolumn{3}{c}{bore arrival [s]} & \multicolumn{3}{c}{rms [cm]} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+ & g5 & g7 & g9 & g5 & g7 & g9 & g5 & g7 & g9 \\
+\midrule
+lab & 3.70 cm & 3.92 cm & 4.54 cm & 14.59 & 14.81 & 14.95 & & & \\
+\NHFOAM, 1.4 cm & +21\% & +24\% & +29\% & +0.39 & +0.11 & +0.03 & 0.58 & 0.52 & 0.58 \\
+\NHFOAM, 2.8 cm & +16\% & +13\% & +18\% & +0.36 & +0.12 & +0.03 & 0.57 & 0.53 & 0.59 \\
+NHWAVE, 2.8 cm & $-3$\% & $-1$\% & $-5$\% & +0.34 & +0.40 & +0.30 & 0.62 & 0.53 & 0.58 \\
+\NHFOAM, 2.8 cm, no breaking & +27\% & +14\% & +20\% & +0.36 & +0.11 & +0.03 & 0.58 & 0.53 & 0.60 \\
+NHWAVE, 2.8 cm, no $k$--$\varepsilon$ & $-1$\% & +2\% & $-3$\% & +0.32 & +0.38 & +0.28 & 0.62 & 0.52 & 0.60 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Monai valley: run-up at the measured points, the head of the
+valley (5.158, 1.880) m and two points on its north side, N1 (5.030, 2.206)
+m and N2 (4.998, 2.320) m (lab: the six repeats), the
+highest flooded ground in the valley ($1.75 < y < 2.05$ m), the flooded land
+and the run time on two cores.}
+\label{tab:wd-monai-runup}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+run & \multicolumn{3}{c}{run-up at the lab points [cm]} & highest in the & flooded & time \\
+\cmidrule(lr){2-4}
+ & head & N1 & N2 & valley [cm] & land [m$^2$] & \\
+\midrule
+lab, range & 8.0--10.0 & 5.25--6.75 & 5.25--5.75 & & & \\
+lab, mean & 9.0 & 6.0 & 5.6 & & & \\
+\NHFOAM, 1.4 cm & 7.4 & 5.4 & 4.4 & 7.5 & 0.65 & 6.2 h \\
+\NHFOAM, 2.8 cm & 6.6 & 4.3 & 4.3 & 6.9 & 0.64 & 35 min \\
+NHWAVE, 2.8 cm & 6.6 & 4.3 & 4.3 & 6.6 & 0.63 & 2.0 h \\
+\NHFOAM, 2.8 cm, no breaking & 6.6 & 4.3 & 4.3 & 6.9 & 0.64 & 35 min \\
+NHWAVE, 2.8 cm, no $k$--$\varepsilon$ & 6.6 & 4.3 & 4.3 & 6.6 & 0.64 & 1.7 h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{monai_valley_gauges.pdf}
+\caption{Monai valley: (a) the surface of the first column ($y = 1.70$ m)
+against the input record; (b--d) water level at gauges 5, 7 and 9 against
+the measurements of \citet{matsuyama2001}.}
+\label{fig:wd-monai}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{monai_valley_runup.pdf}
+\caption{Monai valley: (a) the edge of the flooded area around the valley
+(ground shaded by its height, contours every 2 cm, the still-water shoreline
+thick) and the points of the measured run-up; (b) the highest flooded ground
+along the valley ($4.6 < x < 5.4$ m) against the measured run-up (range of
+the six repeats).}
+\label{fig:wd-monai-runup}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{monai_valley_frames.pdf}
+\caption{Monai valley: shorelines at the times of frames 10--70 of the video
+of the experiment ($t = 15.3$--17.3 s, as the benchmark gives them). At
+15.3 s NHWAVE's shoreline still lies seaward of the frame ($x < 4.7$ m).}
+\label{fig:wd-monai-frames}
 \end{figure}
 
 \subsection{Spilling breakers on a 1:35 beach}
