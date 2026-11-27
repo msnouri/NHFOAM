@@ -37,6 +37,8 @@ usage (python):
     mr.nhfoam("nr_035", lcShelf=0.007, shelf=mr.BOX,        # nested boxes
               lcValley=0.0035, box=mr.HEAD)
     mr.nhfoam("nr_07_tri", lcValley=0.007, quads=False)     # triangles
+    mr.nhfoam("mv_L1_n012", lcShelf=0.014, lcValley=0.007,  # depth-averaged,
+              nz=1, manning=0.012)                          # Manning (README 6.13)
 """
 import os, re
 import numpy as np
@@ -146,9 +148,11 @@ Physical Volume("water") = {{out[1]}};
 def nhfoam(case, lcDeep=0.056, lcShore=0.028, lcValley=0.014, quads=True,
            nz=mv.NZ, dt=0.008, maxCo=1.0, endTime=mv.T_END, film=mv.FILM,
            ks=mv.KS, breaking=True, nproc=2, conv="Gauss limitedLinearV 1",
-           frames=(15.0, 18.0, 0.1), box=BOX, grad=0.2, lcShelf=None, shelf=SHELF):
+           frames=(15.0, 18.0, 0.1), box=BOX, grad=0.2, lcShelf=None, shelf=SHELF,
+           manning=None):
     """monai_valley.nhfoam on the refined mesh; dt is the largest time step
-    (maxCo = None: fixed time step dt)."""
+    (maxCo = None: fixed time step dt); manning: Manning's n instead of the
+    log law with ks."""
     os.makedirs(case, exist_ok=True)
     mc.system_files(case, endTime=endTime, deltaT=dt, writeInterval=1, nCorr=3,
                     nNonOrth=1, pTol=1e-10, conv=conv)
@@ -179,6 +183,8 @@ breaking
 """ if breaking else ""
     snaps = " ".join(f"{t:g}" for t in
                      np.round(np.arange(frames[0], frames[1] + 1e-9, frames[2]), 6))
+    fric = (f"manning     {manning:g};" if manning
+            else f"ks          {ks:g};             // log law, as NHWAVE's Zob")
     mc.constant_files(case, nh_extra=f"""
 wettingDrying
 {{
@@ -187,7 +193,7 @@ wettingDrying
 
 bottomFriction
 {{
-    ks          {ks:g};             // log law, as NHWAVE's Zob
+    {fric}
 }}
 {brk}
 etaMax          yes;

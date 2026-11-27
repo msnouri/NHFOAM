@@ -30,6 +30,8 @@
 #          paddle|solitary>, nw_<A|B|C>)
 #   MV   : the Monai valley (monai_valley.py <dir>: nf_14, nf_28, nw_28)
 #          and its refined meshes (monai_refined.py <dir>: nr_07, nr_035)
+#   SW   : the cases of SWASH (swash_tutorials.py <dir>: nf_t1, nf_t3,
+#          nf_t3_L5; wetdry.tingkirby with nz = 2, 3, 5: tk_L2, tk_L3, tk_L5)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -51,6 +53,7 @@ CI=${CI:-/home/claude/runs_ci}
 TS=${TS:-/home/claude/runs_ts}
 CB=${CB:-/home/claude/runs_cb}
 MV=${MV:-/home/claude/runs_mv}
+SW=${SW:-/home/claude/runs_sw}
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -210,3 +213,10 @@ python3 plot_monai_refined.py $OUT/monai_valley_refined $MV/nr_07 \
     $MV/nf_28:"uniform 2.8 cm" $MV/nf_14:"uniform 1.4 cm" \
     $MV/nr_07:"refined, 0.7 cm in the valley" \
     $MV/nr_035:"refined, 0.35 cm at the head"
+
+# The cases of SWASH: tutorials 1-3, and Ting & Kirby with few layers
+python3 plot_swash_tutorials.py $OUT/swash_tutorials.png \
+    $SW/nf_t1:'tutorials 1--2: $T_p = 10$ s, 1 layer' \
+    $SW/nf_t3:'tutorial 3: $T_p = 5$ s, 2 layers' $SW/nf_t3_L5:'tutorial 3 with 5 layers'
+python3 plot_tingkirby.py $TK94 $OUT/swash_tk_layers.png $SW/tk_L2:"NHFOAM, HFA, 2 layers" \
+    $SW/tk_L3:"3 layers" $SW/tk_L5:"5 layers" $BRK/tk_hfa3:"10 layers"

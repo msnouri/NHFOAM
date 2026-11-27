@@ -1224,6 +1224,7 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | (NTHMP 5, in NHWAVE's benchmark report) solitary waves on a composite beach with a wall | Yeh et al. (1996) | 6.10 |
 | (NHWAVE example, NTHMP 7) tsunami run-up in the Monai valley | Matsuyama & Tanaka (2001) | 6.11 |
 | the same on meshes refined around the valley (NHFOAM only) | Matsuyama & Tanaka (2001) | 6.12 |
+| the tutorials of SWASH, and its laboratory cases with one and two layers (NHFOAM only) | Zijlema et al. (2011), Smit et al. (2013) | 6.13 |
 
 Three of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, the solitary wave that
@@ -2010,6 +2011,142 @@ ground in a 1.4 cm wide strip through each lab point), in cm:
   reaches gauge 5 0.15 s earlier (0.21 s after the measured one instead of
   0.36 s) and gauge 9 0.07–0.11 s later.
 
+### 6.13 The cases of SWASH: its tutorials and its laboratory comparisons
+
+SWASH (Zijlema et al. 2011) is the other open non-hydrostatic model with
+the pressure on the layer interfaces. Its documentation has four tutorials
+(irregular waves on a plane beach; no measurements), and its papers compare
+it with laboratory experiments, most of which NHFOAM has already run with
+the set-ups of NHWAVE. This section runs NHFOAM the way SWASH is run (one or
+two layers, its friction and breaking settings) against the same
+measurements. SWASH itself was not run: everything said about it comes from
+its papers and manual.
+
+| SWASH case | experiment | SWASH's set-up | NHFOAM |
+|---|---|---|---|
+| run-up on a conical island (Zijlema et al. 2011, 5.6) | Briggs et al. (1995) | 5 cm, depth-averaged, no friction | 6.9 (3 layers, C_d = 0.01); here case C with 1 layer, no friction |
+| N-wave run-up on a complex beach (5.7) | Matsuyama & Tanaka (2001) | 1.25 cm, depth-averaged, Manning n = 0.012 | 6.11, 6.12 (4 layers, k_s = 0.1 mm); here 1 layer, n = 0.012 |
+| regular breaking waves (Smit et al. 2013) | Ting & Kirby (1994) | 2.5 cm; 2–5 layers with the hydrostatic front approximation (α = 0.6, β = 0.3), 20 layers without | 6.6, 6.7 (10 layers); here 2, 3 and 5 layers |
+| waves over a submerged bar (examples) | Beji & Battjes (1993), Luth et al. (1994) | | 6.3, 5.7 (3 and 10 layers); here 1 and 2 layers |
+| Berkhoff shoal (examples) | Berkhoff et al. (1982) | | 6.4 (3 layers), no new run |
+| parabolic basin (5.4) | Thacker (1981), exact | | 6.6, no new run |
+| irregular waves on barred beaches (5.8, 5.9; Smit et al. 2013), a shallow foreshore (5.10), rip channels (5.11) | the flume tests of Battjes & Janssen, Boers and others named in those papers | | not run: the measurements were not at hand |
+| tutorials 1–3: JONSWAP waves on a 1:83 beach | none | 1 m, 1 or 2 layers, Manning n = 0.02 | here, against linear shoaling |
+| tutorial 4: oblique short-crested waves, longshore current | none | 1 × 4 m, 1 layer | not run |
+
+`validation/swash_tutorials.py` writes the tutorial cases (and SWASH's input
+files next to them), `plot_swash_tutorials.py` their figure; the other runs
+use the scripts of the sections named in the table with fewer layers.
+
+![SWASH tutorials](doc/figures/swash_tutorials.png)
+
+**Tutorials 1–3.** JONSWAP waves (H_s = 0.5 m) on a beach that rises from
+10 m below to 2 m above the still water over 1 km, Δx = 1 m, Δt = 0.05 s,
+Manning n = 0.02, the hydrostatic front approximation with SWASH's α and β,
+a 1 cm film; the boundary wavemaker with active absorption makes the
+spectrum from 300 components (linear: without the bound waves that SWASH
+adds). The runs take 3–4 min on one core.
+
+- **T_p = 10 s, one layer (tutorials 1–2, kd = 0.68 offshore).** H_s stays
+  2.0–2.6% below linear shoaling from the wavemaker to 4 m depth (2.9% at
+  2.8 m), rises to 0.65 m at 1.4 m depth and falls from there; the mean
+  level drops by 0.5 cm before the surf zone and stands 10 cm above the
+  still water at the still-water shoreline.
+- **T_p = 5 s, two layers (tutorial 3, kd = 1.7).** H_s is 3.7% below
+  linear shoaling at the wavemaker, 9.7% after 100 m and 13% after 300 m
+  (eight peak wavelengths); after that it follows the shoaling curve,
+  13–14% below it. The loss is the one of 5.7 (irregular waves, 3–5% of H_m0 over
+  eight wavelengths in the flume), now with three things known about it.
+  It is not the grid: with Δx and Δt halved H_s changes by about 1%
+  between the wavemaker and 500 m. It is not the short components: the
+  peak band (0.5–1.5 f_p) loses 9% in 300 m (0.455 to 0.416 m), and 8%
+  with the spectrum cut at 1.5 f_p (0.489 to 0.451 m). It depends on
+  the layers: with five layers the peak band loses 6% (0.465 to 0.439 m)
+  and H_s ends 7–9% below linear shoaling. Linear shoaling itself takes 2%
+  off in those 300 m. Regular waves of the peak period do not show it
+  (5.7); the cause is still open.
+- **Breaking.** The front criterion ∂η/∂t > 0.6 √(gD) is never met in
+  these runs (Δx = 1 m for waves of 0.5 m): the waves lose their
+  height in the last 120 m through the TVD convection scheme and the
+  friction, not through the breaking model. Whether SWASH's criterion acts
+  on this grid would take a SWASH run to tell.
+
+**Ting & Kirby's spilling breakers with 2–5 layers** (the set-up of 6.6;
+Smit et al. 2013 use Δx = 2.5 cm and 2–5 layers with the hydrostatic front
+approximation, α = 0.6 and β = 0.3, and report the edge of the surf zone,
+the largest wave height and the decay in the surf zone well reproduced):
+
+![Ting and Kirby with few layers](doc/figures/swash_tk_layers.png)
+
+| layers | largest H at | H, rms error before x = 6 m | H, mean error after x = 7 m | mean level, rms error |
+|---|---|---|---|---|
+| lab | 16.5 cm at 5.99 m (breaking at 6.4 m) | | | |
+| 2 | 16.9 cm at 7.80 m | 0.61 cm | +6.7 cm | 0.73 cm |
+| 3 | 17.0 cm at 7.30 m | 0.55 cm | +6.3 cm | 0.70 cm |
+| 5 | 17.0 cm at 7.10 m | 0.52 cm | +5.9 cm | 0.70 cm |
+| 10 (6.7) | 17.3 cm at 6.40 m | 0.54 cm | +6.1 cm | 0.71 cm |
+
+Up to breaking two layers are enough (0.6 cm rms). The breaking point moves
+shoreward as the layers get fewer (1.4 m late with two), and in the surf
+zone the waves are 6–7 cm too high with any number of layers: with the
+front approximation alone NHFOAM does not reproduce what Smit et al. report
+for SWASH at the same resolution. The difference is not in the criterion,
+which is the same, so it lies in what the hydrostatic bore dissipates in
+NHFOAM (the breaking eddy viscosity of 6.7 nearly halves the error). This
+is the first limitation under Breaking in section 7, and SWASH's result
+says that a hydrostatic front alone can do better.
+
+**The submerged bar with one and two layers** (the set-ups of 6.3 and 5.7;
+rms difference of the surface over the last periods and mean error of the
+wave height at the ten gauges):
+
+| layers | case A (T = 2.02 s): rms, height | case C (T = 1.01 s): rms, height |
+|---|---|---|
+| 1 | 0.80 cm, 17% | 2.0 cm, 12% |
+| 2 | 0.38 cm, 5.0% | 1.3 cm, 8.2% |
+| 3 | 0.31 cm, 4.9% | |
+| 10 | 0.17 cm, 5.1% | 1.4 cm, 7.5% |
+
+Two layers give the wave heights of ten (5% in case A, 8% in case C) and
+twice the rms difference in case A, where the phases of the harmonics
+behind the bar count; one layer loses the harmonics behind the bar (+77% at
+37.3 m). SWASH's manual gives kd ≤ 2.9 for one layer (3% error) and
+kd ≤ 7.7 for two (1%), and NHFOAM's own dispersion table (5.2) says the
+same of it: +3.9% at kh = 3 with one layer, −0.2% with two. In case C the
+rms difference is the phase drift of the long run in all three (5.7).
+
+**The Monai valley, depth-averaged with Manning friction** (SWASH's set-up
+of Zijlema et al. 2011, on the mesh of 6.12 with 1.4 cm on the shelf and
+0.7 cm in the valley, 28 279 columns):
+
+| run | run-up: head / N1 / N2 | crest g5 / g7 / g9 | bore, after the measured one | time, 2 cores |
+|---|---|---|---|---|
+| lab | 8.0–10.0 / 5.25–6.75 / 5.25–5.75 cm | | | |
+| 4 layers, k_s = 0.1 mm (6.12) | 8.1 / 5.6 / 5.1 cm | +23 / +18 / +26% | 0.35 / 0.13 / 0.02 s | 28 min |
+| 1 layer, Manning n = 0.012 | 7.9 / 5.1 / 4.9 cm | +18 / +8 / +16% | 0.34 / 0.15 / 0.03 s | 12 min |
+| 1 layer, k_s = 0.1 mm | 8.1 / 5.6 / 5.3 cm | +22 / +21 / +17% | 0.34 / 0.12 / 0.00 s | 9 min |
+
+One layer gives the run-up of four (8.1 cm at the head in both), the same
+bore and the same rms differences at the gauges (0.52–0.60 cm), in a third
+of the time: the flow in the valley is a long-wave flow, as SWASH's
+depth-averaged run assumes. Manning's n = 0.012 instead of the log law
+takes 0.2–0.5 cm off the run-up and lowers the crests at the gauges (from
++17–22% to +8–18%). Zijlema et al. report the first wave at the gauges in
+very good agreement and give no run-up; their grid of 1.25 cm lies between
+the 1.4 and 0.7 cm of the meshes here.
+
+**The conical island, depth-averaged and without friction** (SWASH's
+set-up; case C, H/d = 0.181, on the 5 cm grid of 6.9): one layer without
+friction gives the crests at the gauges within 5% of the run of 6.9 with
+three layers and C_d = 0.01 in front and at the sides of the island (−1%,
+−1%, +21% and +8% against the lab at gauges 3, 6, 9 and 16; three layers
+0%, +4%, +22%, +8%) and a higher crest behind it (+37% against +28% at
+gauge 22). The run-up around the island differs from the measured one by
+1.5 cm rms (three layers 1.7 cm), with the highest run-up at 15.7 cm
+(15.1 cm; lab 17.5 cm), in half the time (22 against 42 min). Zijlema et
+al. report the run-up reasonably well reproduced, with a small
+underprediction at the front in this case. Cases A and B were not rerun.
+
 ## 7. Limitations (this version)
 
 - **Wetting and drying** has been tested in 2DV, on triangulated strips,
@@ -2029,7 +2166,10 @@ ground in a 1.4 cm wide strip through each lab point), in cm:
   current (6.7, 6.8). With the eddy viscosity the decay inside the surf zone
   is close to the measured one, but just after the breaking point the waves
   lose too little height (3.5–4 cm too much at x = 8 m on Ting & Kirby's
-  beach), and no parameter of the model removes this. The kinematic onset
+  beach), and no parameter of the model removes this. With the hydrostatic
+  front alone the surf-zone heights are 6–7 cm too high with 2 to 10
+  layers, where SWASH is reported to reproduce them with 2 (6.13); fewer
+  layers also break later (1.4 m with two). The kinematic onset
   with B_k ≈ 0.7–0.8 is promising but tested on the two 2DV beaches only;
   its crest-speed estimate does not look across processor boundaries.
 - **Turbulence closure.** `kOmegaLF` gives the undertow its measured
@@ -2039,13 +2179,15 @@ ground in a 1.4 cm wide strip through each lab point), in cm:
   give two thirds of the measured current, at about the right place
   (`longshore.visser(..., dx=0.0343, ny=128, nproc=8)` writes the fine grid).
 - **Wave generation** is linear (no second-order correction for the bound
-  long waves of groups). Measured records enter with a depth-uniform
+  long waves of groups; SWASH adds them). Measured records enter with a depth-uniform
   long-wave velocity; under very steep pulses (H/h ≈ 0.6–0.7) the boundary
   column falls behind the crest (14% in case C of 6.10) and the absorption
   makes up the volume. The absorbing boundary is uniform over the depth
   and reflects 9–13% at kh ≈ 1.7. Directional spreading has not been tested
   in a basin. Irregular waves lose 3–5% of Hm0 over 12 m, in the peak band,
-  for a reason not yet identified (5.7).
+  for a reason not yet identified (5.7); at field scale (SWASH's tutorial
+  3, kd = 1.7) the loss is 10% over eight peak wavelengths with two layers
+  and 6% with five, whatever the grid (6.13).
 - **Trailing waves of the landslide** are up to three times the measured
   ones (5.5, 6.5); the beach is not the cause.
 - **Phase over the submerged bar.** With 3 layers, NHFOAM and NHWAVE both
@@ -2084,11 +2226,13 @@ wetting and drying (6.9). Then measured records as wave input
 beach of NTHMP benchmark 5 (6.10). Then free-surface snapshots at listed
 times (`surfaceSnapshots`) with the tsunami run-up in the Monai valley of
 NTHMP benchmark 7 (6.11), and that valley on quadrilateral meshes refined
-around it, with the adaptive time step (6.12).
+around it, with the adaptive time step (6.12). Then the tutorials of SWASH
+and its laboratory cases with one and two layers (6.13).
 
 Next:
 
-1. Breaking: the transition just after the breaking point; the kinematic
+1. Breaking: the dissipation of the hydrostatic bore (6.13) and the
+   transition just after the breaking point; the kinematic
    onset (B_k ≈ 0.7–0.8) on more beaches and on the longshore current, also
    on Ma et al.'s grid.
 2. Second-order wave generation; a directional-spreading test in a basin.
