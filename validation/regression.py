@@ -68,6 +68,13 @@ def c_tk(case):
                      brk_extra="\n    betaFinal   0.15;\n    Tstar       5;\n    delta       1.2;")
 
 
+def c_tkw(case):
+    # the whole broken wave hydrostatic, with the mixing length of the depth
+    wetdry.tingkirby(case, nz=5, dx=0.05, dt=0.01, nPeriods=6, brk_model="hybrid",
+                     alpha=0.6, beta=0.3,
+                     brk_extra="\n    persistence wave;\n    viscosity   depth;")
+
+
 def c_kw(case):
     wetdry.tingkirby(case, nz=10, dx=0.05, dt=0.01, nPeriods=1, breaking=False,
                      rans=dict(model="kOmegaLF"))
@@ -106,6 +113,7 @@ CASES = {
     "dambreak": (c_dambreak, 1e-6),
     "runup": (c_runup, 1e-3),
     "tk": (c_tk, 5e-3),
+    "tkw": (c_tkw, 5e-3),
     "kw": (c_kw, 1e-5),
     "uplift": (c_uplift, 1e-8),
     "strip": (c_strip, 1e-4),
@@ -186,11 +194,11 @@ def last_gauges(case, start):
 
 
 # ------------------------------------------------------------------ checks
-def check_parallel(work, base, nproc):
-    """The tk case (breaking, wetting and drying) on nproc processors."""
-    case = os.path.join(work, "tk_par")
+def check_parallel(work, base, nproc, build=None):
+    """A tk case (breaking, wetting and drying) on nproc processors."""
+    case = base + "_par"
     shutil.rmtree(case, ignore_errors=True)
-    c_tk(case)
+    (build or c_tk)(case)
     mc.write(case, "system/decomposeParDict", "dictionary", f"""numberOfSubdomains {nproc};
 method          structured;     // whole columns on one processor
 structuredCoeffs
@@ -220,11 +228,11 @@ structuredCoeffs
     return ok, f"max |eta_serial - eta_parallel| at t = {tp:g} s: {diff:.2e} m ({wall:.0f} s wall)"
 
 
-def check_restart(work, base):
-    """The tk case run to half time, then restarted from the written fields."""
-    case = os.path.join(work, "tk_rst")
+def check_restart(work, base, build=None):
+    """A tk case run to half time, then restarted from the written fields."""
+    case = base + "_rst"
     shutil.rmtree(case, ignore_errors=True)
-    c_tk(case)
+    (build or c_tk)(case)
     cd = os.path.join(case, "system/controlDict")
     txt = open(cd).read()
     end = float(re.search(r"\nendTime\s+([^;]+);", txt).group(1))
@@ -303,14 +311,17 @@ def main(argv):
                 failed.append(n)
         else:
             print(f"{n:10s} {'stored' if update else 'no reference'}  {wall:.0f} s")
-    if "tk" in names and os.path.exists(os.path.join(work, "tk", "log.NHFOAM")):
+    for n, build, tag in (("tk", c_tk, ""), ("tkw", c_tkw, " (tkw)")):
+        base = os.path.join(work, n)
+        if n not in names or not os.path.exists(os.path.join(base, "log.NHFOAM")):
+            continue
         for label, (ok, msg) in (
-            ("restart", check_restart(work, os.path.join(work, "tk"))),
-            *((("parallel", check_parallel(work, os.path.join(work, "tk"), nproc)),)
+            ("restart", check_restart(work, base, build)),
+            *((("parallel", check_parallel(work, base, nproc, build)),)
               if nproc > 1 else ())):
-            print(f"{label:10s} {'PASS' if ok else 'FAIL'}  {msg}")
+            print(f"{label:10s} {'PASS' if ok else 'FAIL'}  {msg}{tag}")
             if not ok:
-                failed.append(label)
+                failed.append(label + tag)
     if update:
         ref.update(results)
         with open(REF, "w") as f:

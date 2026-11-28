@@ -134,10 +134,10 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         hydrostatic front approximation alone, however, the spilling
         breakers of Ting and Kirby stay 6--7 cm too high in the surf zone
         with 2 to 10 layers and break up to 1.4 m late with two, where
-        SWASH is reported to reproduce them with two layers: the
-        hydrostatic bore dissipates too little in \NHFOAM. SWASH's source
-        keeps a breaking point hydrostatic until the crest has passed;
-        with that rule, now an option, the error falls by a tenth. On
+        SWASH is reported to reproduce them with two layers. SWASH's
+        source keeps a breaking point hydrostatic until the crest has
+        passed; with that rule, now an option, the error falls by a tenth
+        (the next item has what removes it). On
         SWASH's tutorial beach, irregular waves of $kd = 1.7$ lose 10\% of
         their height over eight peak wavelengths with two layers and 6\%
         with five, on any grid; with $kd = 0.68$ and one layer they follow
@@ -151,6 +151,25 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         layer without friction reproduces the three cases of the conical
         island as three layers with friction do, except for a crest
         behind the island that is 5--9\% higher.
+  \item \textbf{Irregular breaking waves, and what a broken wave needs
+        with few layers.} The measurements of the bar-trough beach of
+        \citet{battjes1978} and the barred beach of \citet{boers1996} were
+        read from the vector figures of \citet{zijlema2011}, to 0.06\% of
+        an axis. With the front approximation and one layer the waves are
+        1.6--4.1 cm rms too high there. Three things were found on the
+        beach of \citet{ting1994}: with every column hydrostatic the inner
+        surf zone has the measured heights, so the bore of the scheme
+        dissipates enough; SWASH's breaking command also turns on an eddy
+        viscosity with the depth as mixing length; and a crest that stays
+        non-hydrostatic behind a hydrostatic front holds the wave up. With
+        the whole wave hydrostatic and that viscosity (\code{persistence
+        wave}, \code{viscosity depth}, SWASH's default numbers) the
+        surf-zone error of Ting and Kirby falls from $+6$--7 cm to
+        $+0.4$--0.9 cm with two to five layers, and with two layers the
+        flume tests are reproduced to 0.6, 1.2 and 0.9 cm rms, as close as
+        SWASH's published runs with a mixing length calibrated for each
+        case (0.8, 1.3, 1.0 cm). With one layer breaking starts about 2 m
+        late.
   \item \textbf{Long runs.} The drift of the phase over the submerged bar
         (0.21 s in 20 s) came from the missing return current of the
         wave-making zone. With the return current, now the default, or the
@@ -164,7 +183,7 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         of \citet{maccamy1954}.
   \item \textbf{Reproducibility.} Restarts continue the run to round-off,
         parallel runs reproduce serial ones with breakers across processor
-        boundaries ($4\times10^{-7}$ m), and a regression suite of twelve
+        boundaries ($4\times10^{-7}$ m), and a regression suite of thirteen
         short cases checks both against stored references. The landslide
         rerun with its beach and wetting and drying showed that the wall
         was not the cause of its large trailing waves.
@@ -192,7 +211,14 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         parameter of the model removes this. With the HFA alone the
         surf-zone waves are too high with any number of layers, and at
         field scale with one layer $H_s/h$ is 0.9--1.1 in the inner surf
-        zone (Section~\ref{sec:swash}). The kinematic onset with
+        zone (Section~\ref{sec:swash}). The set with the whole wave
+        hydrostatic and the mixing length of the depth
+        (Section~\ref{sec:flumes}) removes most of this in 2DV, but it is
+        not the default: the undertow, the longshore current and the 3D
+        tutorial have not been rerun with it, with one layer breaking
+        starts late, with three to five layers the waves lose height
+        slightly before the measured breaking point, and SWASH was not run
+        beside it. The kinematic onset with
         $B_k \approx 0.7$--0.8 is promising but has been tested on the two
         2DV beaches only. The crest-speed estimate does not look across
         processor boundaries.
@@ -221,8 +247,11 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 
 \paragraph{Plans.} In order of priority:
 \begin{enumerate}[nosep]
-  \item breaking: the dissipation of the hydrostatic bore and the
-        transition just after the breaking point; the
+  \item breaking: the whole-wave set of Section~\ref{sec:flumes} on the
+        undertow, the longshore current and SWASH's tutorial in 3D, its
+        late onset with one layer, and then as the default; the rip
+        channels of \citet{haller2002}, whose measurements and bed are
+        digitized; the
         kinematic onset ($B_k \approx 0.7$--0.8) on more beaches and on the
         longshore current, also on the grid of \citet{ma2012};
   \item second-order wave generation, a directional-spreading test in

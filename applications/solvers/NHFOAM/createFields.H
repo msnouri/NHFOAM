@@ -389,11 +389,21 @@ const scalar volume0 =
 //         crestSlope  0.01;   //   speed C from the front faces steeper
 //                             //   than crestSlope (updateBreaking.H)
 //         beta        0.3;    // persistence: d(eta)/dt > beta sqrt(g D)
+//         viscosity   kennedy;    // eddy viscosity of the models
+//                             //   eddyViscosity and hybrid: kennedy
+//                             //   (nu_b = B delta^2 D d(eta)/dt) or depth
+//                             //   (nu_b = nufac D^2 |S_h|, the mixing
+//                             //   length of SWASH's BREAK command)
+//         nufac       1;      // depth: factor
+//         explicitLimit no;   // depth: nu_b below 1/(2 dt sum(1/dx_i^2))
 //         persistence threshold;  // threshold: a breaking column stops
 //                             //   below beta sqrt(g D); crest: it stops
 //                             //   when the surface no longer rises (the
 //                             //   crest has passed), and beta only lets
-//                             //   neighbours join
+//                             //   neighbours join; wave: it stays
+//                             //   breaking through the whole wave and
+//                             //   stops at the crest of a wave whose front
+//                             //   stayed below beta sqrt(g D)
 //         betaFinal   0.15;   // optional: persistence threshold falling
 //         Tstar       5;      //   from beta to betaFinal over the breaking
 //                             //   age T* = Tstar sqrt(D/g)
@@ -468,14 +478,23 @@ const word brkPersistence
     breakingDict.getOrDefault<word>("persistence", "threshold")
 );
 
-if (brkPersistence != "threshold" && brkPersistence != "crest")
+if
+(
+    brkPersistence != "threshold"
+ && brkPersistence != "crest"
+ && brkPersistence != "wave"
+)
 {
     FatalIOErrorInFunction(nhProperties)
         << "Unknown breaking persistence " << brkPersistence
-        << ". Valid: threshold crest" << exit(FatalIOError);
+        << ". Valid: threshold crest wave" << exit(FatalIOError);
 }
 
 const bool brkToCrest(brkPersistence == "crest");
+// wave: a breaking column stays so through the whole wave and is released
+// at the crest of a wave whose front stayed below beta sqrt(g D)
+const bool brkWholeWave(brkPersistence == "wave");
+const scalar brkRise(breakingDict.getOrDefault<scalar>("riseFraction", 0.5));
 const bool brkAgeing(breakingDict.found("betaFinal"));
 const scalar brkBetaFinal
 (
@@ -483,6 +502,29 @@ const scalar brkBetaFinal
 );
 const scalar brkTstar(breakingDict.getOrDefault<scalar>("Tstar", 5));
 const scalar brkDelta(breakingDict.getOrDefault<scalar>("delta", 1.2));
+
+// Breaking eddy viscosity: Kennedy et al. (2000), or the mixing length of
+// SWASH's BREAK command, nu_b = nufac D^2 |S_h| in the breaking columns
+const word brkViscosity
+(
+    breakingDict.getOrDefault<word>("viscosity", "kennedy")
+);
+
+if (brkViscosity != "kennedy" && brkViscosity != "depth")
+{
+    FatalIOErrorInFunction(nhProperties)
+        << "Unknown breaking viscosity " << brkViscosity
+        << ". Valid: kennedy depth" << exit(FatalIOError);
+}
+
+const bool brkDepthVisc(brkViscosity == "depth");
+const scalar brkNuFac(breakingDict.getOrDefault<scalar>("nufac", 1));
+// explicitLimit: nu_b not above the stability limit of an explicit scheme,
+// 1/(2 dt sum(1/dx_i^2)), which SWASH applies
+const bool brkNuLimit
+(
+    breakingDict.getOrDefault<bool>("explicitLimit", false)
+);
 // verticalMixing: fraction of nu_b on the layer faces (yes = 1, no = 0)
 scalar brkVertical = 0;
 if (breakingDict.found("verticalMixing"))
@@ -535,10 +577,22 @@ if (breakingOn)
     {
         Info<< " to join, breaking columns until the crest has passed";
     }
+    if (brkWholeWave)
+    {
+        Info<< " to join, breaking columns until the wave has passed";
+    }
     if (breakingVisc)
     {
-        Info<< ", eddy viscosity delta " << brkDelta
-            << (brkVertical > 0 ? " (horizontal, vertical x " : " (horizontal");
+        if (brkDepthVisc)
+        {
+            Info<< ", eddy viscosity " << brkNuFac << " D^2 |S_h|"
+                << (brkNuLimit ? " below the explicit limit" : "");
+        }
+        else
+        {
+            Info<< ", eddy viscosity delta " << brkDelta;
+        }
+        Info<< (brkVertical > 0 ? " (horizontal, vertical x " : " (horizontal");
         if (brkVertical > 0)
         {
             Info<< brkVertical;
@@ -549,6 +603,10 @@ if (breakingOn)
 }
 
 boolList colBreaking(columns.nColumns(), false);
+// phase of the breaking columns (persistence wave): 1 rising without a
+// steep front, 2 rising with one, 3 behind the crest; written as the value
+// of the field breaking
+labelList colPhase(columns.nColumns(), 0);
 scalarField colAge(columns.nColumns(), 0);
 scalarField colNuB(columns.nColumns(), 0);
 
@@ -617,6 +675,7 @@ if (breakingOn && restartState)
         forAll(colBreaking, coli)
         {
             colBreaking[coli] = (bCol[coli] > 0.5);
+            colPhase[coli] = (colBreaking[coli] ? label(bCol[coli] + 0.5) : 0);
         }
         breaking.primitiveFieldRef() = b.primitiveField();
         breaking.correctBoundaryConditions();

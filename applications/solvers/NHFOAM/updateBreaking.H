@@ -8,9 +8,12 @@
 //                   over |grad(eta)|), or C = sqrt(g D) if there are none
 //   persistence     for columns that were breaking: d(eta)/dt > eta_t*
 //                   (persistence threshold), or d(eta)/dt > 0, i.e. until
-//                   the crest has passed (persistence crest; SWASH); a
-//                   column next to a breaking column joins above
-//                   beta sqrt(g D)
+//                   the crest has passed (persistence crest; SWASH), or
+//                   through the whole wave (persistence wave): over the
+//                   crest, down the back and under the next front, until a
+//                   crest passes whose front never rose faster than
+//                   beta sqrt(g D); a column next to a breaking column
+//                   joins above beta sqrt(g D)
 //                     eta_t* = beta sqrt(g D)                   (default)
 //                     eta_t* = [beta + (betaFinal - beta) min(age/T*, 1)]
 //                              sqrt(g D),  T* = Tstar sqrt(D/g)
@@ -19,12 +22,16 @@
 //                   breaker takes over its age, so the age is that of the
 //                   breaking event and travels with the wave.
 //   eddy viscosity  nu_b = B delta^2 D d(eta)/dt,
-//                   B = min(max(d(eta)/dt/eta_t* - 1, 0), 1)
+//                   B = min(max(d(eta)/dt/eta_t* - 1, 0), 1)   (kennedy)
+//                   nu_b = nufac D^2 |S_h| in the breaking columns, S_h the
+//                   horizontal strain rate (depth; SWASH's BREAK command)
 // d(eta)/dt is taken from the last two time levels.  The same rules with
 // the defaults (etaT, fixed beta) are the hydrostatic front approximation of
 // Smit, Zijlema & Stelling (2013).
 {
     const boolList wasBreaking(colBreaking);
+    const labelList wasPhase(colPhase);
+    colPhase = 0;
     const scalarField age0(colAge);
     const label nCol = colBreaking.size();
 
@@ -149,20 +156,60 @@
             if (wasBreaking[coli])
             {
                 const scalar a = age0[coli] + dt0;
+                bool keep;
 
-                if
-                (
-                    onset[coli]
-                 || etaT[coli] > (brkToCrest ? scalar(0) : threshold(coli, a))
-                )
+                if (brkWholeWave)
+                {
+                    // The column stays breaking over the crest, down the
+                    // back of the wave and under the next front, and is
+                    // released at the next crest if that front never rose
+                    // faster than beta sqrt(g D) (the wave has reformed).
+                    // Phase: 1 rising, no steep front yet; 2 rising with a
+                    // steep front; 3 behind the crest.
+                    const bool steep = etaT[coli] > hfaBeta*cc[coli];
+
+                    // behind the crest, a rise slower than brkRise times
+                    // the joining threshold is not a new front
+                    if
+                    (
+                        etaT[coli]
+                      > (wasPhase[coli] == 3 ? brkRise*hfaBeta*cc[coli] : 0)
+                    )
+                    {
+                        keep = true;
+                        colPhase[coli] =
+                        (
+                            (steep || wasPhase[coli] == 2) ? 2 : 1
+                        );
+                    }
+                    else
+                    {
+                        keep = (wasPhase[coli] != 1);
+                        colPhase[coli] = (keep ? 3 : 0);
+                    }
+                }
+                else
+                {
+                    keep =
+                        etaT[coli]
+                      > (brkToCrest ? scalar(0) : threshold(coli, a));
+                }
+
+                if (onset[coli] || keep)
                 {
                     colBreaking[coli] = true;
                     colAge[coli] = a;
+
+                    if (onset[coli])
+                    {
+                        colPhase[coli] = 2;
+                    }
                 }
             }
             else if (onset[coli])
             {
                 colBreaking[coli] = true;
+                colPhase[coli] = 2;
             }
         }
 
@@ -174,7 +221,18 @@
         // of an older breaking neighbour, so the age is that of the breaking
         // event and travels with the wave.
         // Join (or take the age of) a breaking neighbour of age aNb
-        auto join = [&](const label coli, const scalar aNb)
+        // With persistence wave the breaking columns outlast the front, so
+        // a new column joins only ahead of a steep front: next to a column
+        // of phase 2 with a higher surface (frontNb, etaNb).  Otherwise the
+        // breaking region would grow seawards, to where the fronts reach
+        // beta instead of alpha.
+        auto join = [&]
+        (
+            const label coli,
+            const scalar aNb,
+            const bool frontNb,
+            const scalar etaNb
+        )
         {
             if (aNb < 0 || (wet.size() && !wet[coli]))
             {
@@ -186,9 +244,22 @@
             if
             (
                 aNb > a
-             && (colBreaking[coli] || etaT[coli] > threshold(coli, 0))
+             && (
+                    colBreaking[coli]
+                 || (
+                        etaT[coli] > threshold(coli, 0)
+                     && (
+                            !brkWholeWave
+                         || (frontNb && etaN[coli] < etaNb)
+                        )
+                    )
+                )
             )
             {
+                if (!colBreaking[coli])
+                {
+                    colPhase[coli] = 2;     // joins on a steep front
+                }
                 colBreaking[coli] = true;
                 colAge[coli] = aNb;
                 return true;
@@ -215,7 +286,11 @@
                     {
                         const label cn = nb[i];
 
-                        if (colBreaking[cn] && join(coli, colAge[cn]))
+                        if
+                        (
+                            colBreaking[cn]
+                         && join(coli, colAge[cn], colPhase[cn] == 2, etaN[cn])
+                        )
                         {
                             changed = true;
                         }
@@ -235,7 +310,45 @@
 
             for (label iter = 0; iter < 1000; ++iter)
             {
-                scalarField colA(nCol, -1);
+                // the surface of the neighbours, then the phase and the age
+                scalarField colA(etaN);
+                columns.setCellValues(colA, brkExchange.primitiveFieldRef());
+                brkExchange.correctBoundaryConditions();
+                PtrList<scalarField> nbEta(mesh.boundary().size());
+                PtrList<scalarField> nbPhase(mesh.boundary().size());
+                forAll(mesh.boundary(), patchi)
+                {
+                    if (mesh.boundary()[patchi].coupled())
+                    {
+                        nbEta.set
+                        (
+                            patchi,
+                            brkExchange.boundaryField()[patchi]
+                           .patchNeighbourField()
+                        );
+                    }
+                }
+
+                forAll(colA, coli)
+                {
+                    colA[coli] = colPhase[coli];
+                }
+                columns.setCellValues(colA, brkExchange.primitiveFieldRef());
+                brkExchange.correctBoundaryConditions();
+                forAll(mesh.boundary(), patchi)
+                {
+                    if (mesh.boundary()[patchi].coupled())
+                    {
+                        nbPhase.set
+                        (
+                            patchi,
+                            brkExchange.boundaryField()[patchi]
+                           .patchNeighbourField()
+                        );
+                    }
+                }
+
+                colA = -1;
                 forAll(colBreaking, coli)
                 {
                     if (colBreaking[coli])
@@ -266,7 +379,17 @@
 
                     forAll(fc, i)
                     {
-                        if (join(cellCol[fc[i]], nbA[i]))
+                        if
+                        (
+                            join
+                            (
+                                cellCol[fc[i]],
+                                nbA[i],
+                                nbPhase[patchi][i] > 1.5
+                             && nbPhase[patchi][i] < 2.5,
+                                nbEta[patchi][i]
+                            )
+                        )
                         {
                             changed = true;
                         }
@@ -285,8 +408,56 @@
             }
         }
 
+        // Breaking eddy viscosity: the mixing length of SWASH's BREAK
+        // command, nu_b = nufac D^2 |S_h| with the horizontal strain rate of
+        // the column, S_h^2 = c (u_x^2 + v_y^2) + (u_y + v_x)^2, c = 2 (c = 1
+        // in two dimensions, where SWASH has |u_x|)
+        if (breakingVisc && brkDepthVisc)
+        {
+            const volTensorField gradU(fvc::grad(U));
+            const scalarField& Vc = mesh.V();
+            const labelListList& colCells = columns.columnCells();
+            const scalarField& colA = columns.columnArea();
+            const scalar cN = (mesh.nSolutionD() == 3 ? 2 : 1);
+            const scalar dt = runTime.deltaTValue();
+
+            forAll(colNuB, coli)
+            {
+                if (!colBreaking[coli])
+                {
+                    continue;
+                }
+
+                scalar s = 0, v = 0;
+                for (const label celli : colCells[coli])
+                {
+                    const tensor& g = gradU[celli];
+                    s +=
+                        Vc[celli]
+                       *Foam::sqrt
+                        (
+                            cN*(sqr(g.xx()) + sqr(g.yy()))
+                          + sqr(g.xy() + g.yx())
+                        );
+                    v += Vc[celli];
+                }
+
+                colNuB[coli] = brkNuFac*sqr(Dc[coli])*s/max(v, VSMALL);
+
+                if (brkNuLimit)
+                {
+                    // square columns: dx^2 = dy^2 = column area
+                    colNuB[coli] = min
+                    (
+                        colNuB[coli],
+                        colA[coli]/(2*dt*(mesh.nSolutionD() - 1))
+                    );
+                }
+            }
+        }
+
         // Breaking eddy viscosity (Kennedy et al. 2000)
-        if (breakingVisc)
+        if (breakingVisc && !brkDepthVisc)
         {
             forAll(colNuB, coli)
             {
@@ -337,7 +508,7 @@
     {
         if (colBreaking[coli])
         {
-            colB[coli] = 1;
+            colB[coli] = (brkWholeWave ? max(colPhase[coli], 1) : 1);
         }
     }
     columns.setCellValues(colB, breaking.primitiveFieldRef());

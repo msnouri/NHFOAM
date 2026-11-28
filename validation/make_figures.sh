@@ -30,6 +30,9 @@
 #          paddle|solitary>, nw_<A|B|C>)
 #   MV   : the Monai valley (monai_valley.py <dir>: nf_14, nf_28, nw_28)
 #          and its refined meshes (monai_refined.py <dir>: nr_07, nr_035)
+#   FL   : the flume tests of swash_flumes.py (python3 swash_flumes.py in
+#          the directory, ./Allrun in each case, then
+#          python3 swash_flumes.py finish <case> ...)
 #   SW   : the cases of SWASH (swash_tutorials.py <dir>: nf_t1, nf_t3,
 #          nf_t3_L5, nf_t4; wetdry.tingkirby with nz = 2, 3, 5: tk_L2,
 #          tk_L3, tk_L5)
@@ -55,6 +58,7 @@ TS=${TS:-/home/claude/runs_ts}
 CB=${CB:-/home/claude/runs_cb}
 MV=${MV:-/home/claude/runs_mv}
 SW=${SW:-/home/claude/runs_sw}
+FL=${FL:-/home/claude/runs_fl}      # swash_flumes.py <dir>, then finish
 OUT=${OUT:-../doc/figures}
 mkdir -p "$OUT"
 
@@ -222,3 +226,14 @@ python3 plot_swash_tutorials.py $OUT/swash_tutorials.png \
 python3 plot_swash_oblique.py $OUT/swash_oblique.png $SW/nf_t4
 python3 plot_tingkirby.py $TK94 $OUT/swash_tk_layers.png $SW/tk_L2:"NHFOAM, HFA, 2 layers" \
     $SW/tk_L3:"3 layers" $SW/tk_L5:"5 layers" $BRK/tk_hfa3:"10 layers"
+
+# The flume tests of Zijlema et al. (2011) with the measurements read from
+# its figures (digitize_zijlema2011.py <paper.pdf> $ZIJLEMA2011_DATA), and
+# Ting & Kirby with the whole-wave breaking set (tk_L<n>_wv: tk_L<n> with
+# model hybrid; persistence wave; viscosity depth;)
+python3 plot_swash_flumes.py bj $OUT/swash_bj78.png $FL
+python3 plot_swash_flumes.py boers $OUT/swash_boers.png $FL
+python3 plot_tingkirby.py $TK94 $OUT/swash_tk_wave.png $SW/tk_L3:"NHFOAM, 3 layers, front only" \
+    $SW/tk_L2_wv:"NHFOAM, 2 layers, whole wave + mixing length" \
+    $SW/tk_L3_wv:"NHFOAM, 3 layers, whole wave + mixing length" \
+    $SW/tk_L5_wv:"NHFOAM, 5 layers, whole wave + mixing length"

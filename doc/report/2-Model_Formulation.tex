@@ -225,7 +225,17 @@ This is the default, \code{persistence threshold}. With
 \code{persistence crest} a breaking column keeps breaking until its surface
 stops rising ($\partial\eta/\partial t > 0$), that is, until the crest has
 passed, and \eqref{eq:persist} only decides whether a neighbour joins; this
-is the rule in SWASH's source.
+is the rule in SWASH's source. With \code{persistence wave} the column
+stays breaking through the whole wave, over the crest, down the back and
+under the next front, and is released at the next crest only if that front
+never rose faster than $\beta\sqrt{gD}$, that is, when the wave has
+reformed; behind the crest a rise slower than half that rate
+(\code{riseFraction}) does not count as a new front. A new column then
+joins only ahead of a steep front, next to a column of that front with a
+higher surface, so that the breaking region, which now outlasts the front,
+does not grow seawards to where the fronts reach $\beta$ instead of
+$\alpha$. The broken wave is then a hydrostatic bore from its toe to the
+next front (Section~\ref{sec:flumes}).
 Without $\beta_F$ the threshold is the constant $\beta\sqrt{gD}$ of
 \citet{smit2013} ($\alpha = 0.6$, $\beta = 0.3$). With $\beta_F$ it falls with
 the age $t-t_0$ of the breaking event, as in the eddy-viscosity model of
@@ -254,7 +264,20 @@ the breaking columns, alone or together (\code{model HFA},
         the side faces of the columns (horizontal mixing), optionally also,
         with a fraction of $\nu_b$, through the layer faces
         (\code{verticalMixing}, 0 to 1), and not through the closed faces
-        of dry columns. The non-hydrostatic pressure is kept.
+        of dry columns. The non-hydrostatic pressure is kept. With
+        \code{viscosity depth} the eddy viscosity is the one that SWASH's
+        \code{BREAK} command adds in its breaking points, a mixing length
+        equal to the depth,
+        \begin{equation}
+        \nu_b = n_f\,D^2\,|S_h|,\qquad
+        S_h^2 = 2u_x^2 + 2v_y^2 + (u_y + v_x)^2,
+        \label{eq:nudepth}
+        \end{equation}
+        with $n_f = 1$ (\code{nufac}) and the horizontal strain rate of
+        the column ($|u_x|$ in two dimensions, as in SWASH). SWASH keeps it
+        below the stability limit of its explicit scheme
+        (\code{explicitLimit}); here the term is implicit and the limit is
+        off by default.
 \end{itemize}
 Subgrid turbulence can be added with OpenFOAM's turbulence library. The
 Smagorinsky model of the LES library with the filter width $V^{1/3}$ of the

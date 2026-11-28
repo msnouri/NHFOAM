@@ -79,6 +79,14 @@ arriving 0.3--0.4 s late, and on the benchmark grid \NHFOAM's run-up at the
 head of the valley is 7.4 cm against 8.0--10.0 cm measured. On a mesh refined
 to 0.7 cm in the valley only, with fewer columns than the grid twice as
 coarse as the benchmark's, it is 8.1 cm, in 22 min against 6.2 h.
+For the flume tests of irregular waves breaking over bars of
+\citet{battjes1978} and \citet{boers1996} the measurements were read from
+the vector figures of \citet{zijlema2011}. A breaking set that keeps the
+whole broken wave hydrostatic and adds an eddy viscosity with the depth as
+mixing length, as SWASH does in its breaking points, reproduces $H_{m0}$
+there to 0.6--1.2 cm rms with two layers and brings the surf-zone error on
+the beach of \citet{ting1994} below 1 cm; it is an option, not yet the
+default.
 Restarts are
 exact, parallel runs reproduce serial ones with breakers across processor
 boundaries, and a regression suite guards both.

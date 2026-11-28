@@ -184,7 +184,16 @@ column keeps breaking, and a neighbouring column joins it, while
 `persistence crest` a breaking column keeps breaking until its surface
 stops rising, i.e. until the crest has passed, and η_t* only decides
 whether a neighbour joins: this is what SWASH does (its routine
-`SwashBreakPoint`). Without `betaFinal`,
+`SwashBreakPoint`). With `persistence wave` the column stays breaking
+through the whole wave: over the crest, down the back and under the next
+front, and it is released at the next crest only if that front never rose
+faster than β√(gD), i.e. when the wave has reformed. (Behind the crest a
+rise slower than `riseFraction` β√(gD) does not count as a new front.) A
+new column then joins only ahead of a steep front, next to a column of
+that front whose surface is higher; otherwise the breaking region, which
+now outlasts the front, would grow seawards to where the fronts reach β
+instead of α. The broken wave is then a hydrostatic bore from its toe to
+the next front (6.14). Without `betaFinal`,
 η_t* = β√(gD) as in Smit et al. With `betaFinal`, η_t* falls from β√(gD) to
 β_F√(gD) over the age t − t₀ of the breaking event, T* = T_s√(D/g), as in
 the eddy-viscosity model of Kennedy et al. (2000); a column that joins next
@@ -213,6 +222,13 @@ treatments act in the breaking columns (`model HFA`, `eddyViscosity` or
   layer faces, `yes`/`no` = 1/0), not
   through closed faces of dry columns, and is implicit in u. The
   non-hydrostatic pressure is kept.
+  With `viscosity depth` the eddy viscosity is the one that SWASH's `BREAK`
+  command adds in its breaking points: a mixing length equal to the depth,
+  ν_b = n_f D² |S_h| with n_f = 1 (`nufac`) and the horizontal strain rate
+  S_h² = 2u_x² + 2v_y² + (u_y + v_x)² of the column (|u_x| in two
+  dimensions, as in SWASH). SWASH keeps it below the stability limit of
+  its explicit scheme, 1/(2Δt Σ1/Δx_i²) (`explicitLimit yes`); here the
+  term is implicit and the limit is off by default.
 
 Subgrid turbulence comes from OpenFOAM's turbulence library. The LES
 Smagorinsky model with `delta cubeRootVol` is the model NHWAVE uses for the
@@ -299,11 +315,11 @@ versions are used (the turbulence model follows the v1912 template of
 OpenFOAM's `kOmega`; its headers were not available to check). `./Allwclean`
 removes the build.
 
-*Tests.* `validation/regression.py <workDir>` runs twelve short cases (about
-3 minutes on one core: standing and solitary waves, the boundary wavemaker
+*Tests.* `validation/regression.py <workDir>` runs thirteen short cases (about
+4 minutes on one core: standing and solitary waves, the boundary wavemaker
 with regular and irregular waves and with measured elevation and paddle
 records, a dam break and the run-up with wetting and drying, breaking on
-Ting & Kirby's beach, the k–ω model, a bottom uplift and a triangulated
+Ting & Kirby's beach with two breaking sets, the k–ω model, a bottom uplift and a triangulated
 beach) and compares their gauge records with the
 stored references (`regression_ref.json`). It also checks that a parallel
 run (2 processors, the breaker crossing the processor boundary) and a run
@@ -434,7 +450,16 @@ breaking
     persistence threshold;   // threshold: a breaking column stops below
                              //   beta sqrt(g D); crest: it stops when the
                              //   crest has passed (SWASH), and beta only
-                             //   lets neighbours join
+                             //   lets neighbours join; wave: it stays
+                             //   breaking through the whole wave, until
+                             //   the crest of a wave whose front stayed
+                             //   below beta sqrt(g D)
+    riseFraction 0.5;        // wave: behind the crest, a rise slower than
+                             //   this times beta sqrt(g D) is no new front
+    viscosity   kennedy;     // eddy viscosity: kennedy (below) | depth
+                             //   (nu_b = nufac D^2 |S_h|, SWASH's BREAK)
+    nufac       1;           // depth: factor
+    explicitLimit no;        // depth: nu_b below 1/(2 dt sum(1/dx_i^2))
     betaFinal   0.15;        // optional: persistence threshold falls from
     Tstar       5;           //   beta to betaFinal over Tstar sqrt(D/g)
     delta       1.2;         // eddy viscosity nu_b = B delta^2 D d(eta)/dt
@@ -1207,10 +1232,12 @@ reflections from the walls of the half domain (0.135 a_I rms).
   the mesh points.
 - **Restarts** (section 3): 6·10⁻¹⁴ m after a restart with breaking, wetting
   and drying, with the fields written at full precision.
-- **Regression suite** (`validation/regression.py`, section 2): twelve short
-  cases against stored references; the parallel run of its breaking case
-  (`structured` decomposition, the boundary near the breaking point) matches
-  the serial one to 2·10⁻⁷ m, the restarted run to 10⁻¹² m.
+- **Regression suite** (`validation/regression.py`, section 2): thirteen
+  short cases against stored references; the parallel runs of its two
+  breaking cases (`structured` decomposition, the boundary near the
+  breaking point; the second with `persistence wave` and
+  `viscosity depth`) match the serial ones to 2·10⁻⁷ m, the restarted runs
+  to 10⁻¹² m.
 - **Run time on 1 and 2 cores** (`structured` decomposition, an otherwise
   idle 2-core machine): Ting & Kirby's beach with breaking and wetting and
   drying (9 200 cells, 10 s) 102 s → 62 s (speed-up 1.64), the 3D landslide
@@ -1241,6 +1268,7 @@ each was used to look for weaknesses of NHFOAM before moving on.
 | (NHWAVE example, NTHMP 7) tsunami run-up in the Monai valley | Matsuyama & Tanaka (2001) | 6.11 |
 | the same on meshes refined around the valley (NHFOAM only) | Matsuyama & Tanaka (2001) | 6.12 |
 | the tutorials of SWASH, and its laboratory cases with one and two layers (NHFOAM only) | Zijlema et al. (2011), Smit et al. (2013) | 6.13 |
+| irregular breaking waves on barred beaches, with the measurements read from the figures of SWASH's paper (NHFOAM only) | Battjes & Janssen (1978), Boers (1996) | 6.14 |
 
 Three of the tests changed the code and its defaults: the standing waves
 showed that the TVD scheme damps steep short waves, the solitary wave that
@@ -2046,7 +2074,10 @@ its papers, its manual and its source.
 | waves over a submerged bar (examples) | Beji & Battjes (1993), Luth et al. (1994) | | 6.3, 5.7 (3 and 10 layers); here 1 and 2 layers |
 | Berkhoff shoal (examples) | Berkhoff et al. (1982) | | 6.4 (3 layers), no new run |
 | parabolic basin (5.4) | Thacker (1981), exact | | 6.6, no new run |
-| irregular waves on barred beaches (5.8, 5.9; Smit et al. 2013), a shallow foreshore (5.10), rip channels (5.11) | the flume tests of Battjes & Janssen, Boers and others named in those papers | | not run: the measurements were not at hand |
+| irregular waves on a bar-trough beach (5.8) | Battjes & Janssen (1978), runs 13 and 15 | 5 cm, depth-averaged, no friction, mixing length 0.15 and 0.20 m | 6.14, with the measurements read from the figures of the paper |
+| irregular waves on a barred beach (5.9) | Boers (1996), case 1B | 2 cm, depth-averaged, mixing length 0.13 m | 6.14 |
+| rip channels (5.11) | Haller et al. (2002), test B | 5 cm, 1 layer, 1638 s | not run (a day or two on two cores); measurements and bed read from the figures (6.14) |
+| a shallow foreshore (5.10) | Van Gent & Doorn (2000) | 1 m, 2 layers | not run: the figures give spectra only |
 | tutorials 1–3: JONSWAP waves on a 1:83 beach | none | 1 m, 1 or 2 layers, Manning n = 0.02 | here, against linear shoaling |
 | tutorial 4: oblique short-crested waves, longshore current | none | 1 × 4 m, 1 layer, Manning n = 0.02, Smagorinsky | here, against linear refraction and the return of the wave mass flux |
 
@@ -2191,8 +2222,9 @@ not the whole answer either: with a threshold that falls below zero
 (`betaFinal -0.3`), so that the columns stay hydrostatic after the first
 front has passed (73 columns on average instead of 7), the heights are
 still 4.8 cm too high. The breaking eddy viscosity of 6.7 nearly halves
-the error. This is the first limitation under Breaking in section 7, and
-SWASH's result says that a hydrostatic front alone can do better.
+the error. Section 6.14 takes this up with the flume tests of SWASH's
+paper and ends with a breaking set that brings the error down to
+0.4–0.9 cm.
 
 **The submerged bar with one and two layers** (the set-ups of 6.3 and 5.7;
 rms difference of the surface over the last periods and mean error of the
@@ -2256,6 +2288,186 @@ al. report the run-up reasonably well reproduced, with a small
 underprediction at the front in case C; here the highest run-up of cases B
 and C is also below the measured one.
 
+### 6.14 Irregular breaking waves on barred beaches, and what a breaking wave needs with one or two layers
+
+Zijlema et al. (2011) compare SWASH with two flume tests of irregular waves
+breaking over bars: the bar-trough beach of Battjes & Janssen (1978), runs
+13 (few waves break on the bar) and 15 (most do), and the barred beach of
+Boers (1996), case 1B. The measurements were not at hand as files, so they
+are read from the figures of the paper.
+
+**Reading the figures.** The figures of the paper are vector graphics: the
+markers and curves are in the PDF at the coordinates at which they were
+drawn. `validation/figdig.py` finds the plot frames, fits each axis to its
+tick marks and tick labels (the largest misfit is 0.06% of an axis) and
+returns the centres of the markers and the vertices of the curves;
+`digitize_zijlema2011.py <paper.pdf> <dir>` writes the bed profiles, the
+gauge positions, the measured H_m0 (and T_m02, and the spectra at Boers's
+eight stations) and SWASH's own results, which are in the same figures.
+Two figures check each other: H_m0 from the area under the measured
+spectra of Boers agrees with the plotted H_m0 at the eight stations within
+2.5%. The values are as good as the plotting of the paper, not as the
+original records. Neither the paper nor the data files are in the
+repository; the script regenerates them from a copy of the paper. The
+still-water depths of Battjes & Janssen's runs are not in Zijlema et al.:
+their sketch is drawn for 0.70 m at the wavemaker, and Battjes & Janssen's
+Table 1 has 0.762 m for run 13 and 0.616 m for run 15, which with the
+sketched bed gives the depths over the bar crest that they list (0.27 and
+0.12 m).
+
+**Set-up.** `validation/swash_flumes.py`: Δx = 5 cm (Battjes & Janssen,
+as SWASH) and 4 cm (Boers; SWASH 2 cm), Δt = 0.01 and 0.008 s, one or two
+layers, no bottom friction, a 5 mm film, the boundary wavemaker with
+`layerAverage`. Battjes & Janssen: JONSWAP waves with the H_m0 and T_p of
+the paper (0.147 m, 2.01 s; 0.202 m, 1.89 s) from 1500 components, 1260 s,
+statistics over the last 1200 s (one repeat of the components). Boers: the
+spectrum measured at station 1 (x = 5 m), taken back to the depth at the
+wavemaker with linear shoaling and scaled to the H_m0 measured at x = 0
+(0.206 m), as 2107 components from 0.2 to 1.5 Hz; 1680 s as in SWASH,
+statistics over the last 1620 s. A run takes 11–14 min (Battjes & Janssen)
+or 26–28 min (Boers) on one core with one layer and 1.6 times that with
+two. SWASH's runs in the paper are depth-averaged with a mixing length
+that was chosen for each case (0.15, 0.20 and 0.13 m) and acts everywhere;
+its front approximation came later (Smit et al. 2013).
+
+**With the front approximation the waves are far too high.** With one
+layer and SWASH's rule for the front (`persistence crest`), H_m0 behind
+the bar of run 15 is 12–14 cm where 8–9 cm were measured, and in Boers's
+flume the waves do not lose height before the bar at x = 20 m, where the
+measured ones lose a quarter (first row of the table below). On average
+4 to 9 columns are breaking. Kennedy et al.'s eddy viscosity with two
+layers (the set of 6.7) gives 3.4 cm rms in run 15. This is the surf zone
+of 6.13 again, now with irregular waves.
+
+**What was tried, on Ting & Kirby's spilling breakers with three layers**
+(H in the surf zone, mean error after x = 7 m; lab breaking at 6.4 m):
+
+| breaking set | largest H at | H after 7 m | mean level, rms | breaking columns |
+|---|---|---|---|---|
+| front, released below β√(gD) (default) | 7.30 m | +6.3 cm | 0.70 cm | 7 |
+| front, until the crest (SWASH's rule) | 7.30 m | +5.7 cm | 0.68 cm | 7 |
+| the same with SWASH's mixing length in the breaking columns | 7.10 m | +4.0 cm | 0.53 cm | 19 |
+| every column hydrostatic | (1.40 m) | −1.1 cm | 0.45 cm | all |
+| whole wave | 6.70 m | +3.5 cm | 0.56 cm | 225 |
+| whole wave with the mixing length | 5.60 m | +0.6 cm | 0.37 cm | 245 |
+
+1. *The bore of the scheme dissipates the right amount.* With every column
+   hydrostatic the waves break long before the beach, as they must without
+   dispersion, but in the inner surf zone they have the measured heights
+   (5.0 and 4.2 cm at x = 9.98 and 10.98 m; lab 5.6 and 3.9 cm). So the
+   momentum-conserving scheme is not what is missing.
+2. *SWASH's `BREAK` does more than switch the pressure off.* Its source
+   (`SwashReadInput`, `SwashHorzVisc`) turns on a horizontal eddy viscosity
+   in the breaking points when no other is chosen: a mixing length equal to
+   the depth, ν = n_f h² |∂u/∂x| with n_f = 1 by default (a third,
+   undocumented argument of the command). This is now `viscosity depth`.
+   In the two or three columns of a front it takes 1.7 cm off.
+3. *The crest has to be hydrostatic as well.* With the front alone, a
+   wave over the bar of run 15 stays a peaked crest: two or three hydrostatic columns
+   on its face, and behind them a non-hydrostatic pressure of −0.14 m of
+   water under the crest that holds it up. With `persistence wave` a
+   column that has started breaking stays hydrostatic through the whole
+   wave, until a crest passes whose front never reached β√(gD); new
+   columns join only ahead of a steep front, so the region does not grow
+   seawards. The broken waves then are saw-toothed bores.
+4. *Both together.* The whole wave hydrostatic and the mixing length of
+   the depth in it, with SWASH's default α = 0.6, β = 0.3 and n_f = 1:
+
+```c++
+breaking
+{
+    model       hybrid;
+    alpha       0.6;
+    beta        0.3;
+    persistence wave;
+    viscosity   depth;
+    nufac       1;
+}
+```
+
+**Ting & Kirby with this set** (the table of 6.13 has the front alone):
+
+![Ting and Kirby with the whole-wave set](doc/figures/swash_tk_wave.png)
+
+| layers | largest H at | H, rms error before x = 6 m | H, mean error after x = 7 m | mean level, rms error |
+|---|---|---|---|---|
+| lab | 16.5 cm at 5.99 m (breaking at 6.4 m) | | | |
+| 2 | 15.8 cm at 6.50 m | 0.84 cm | +0.9 cm (front alone +6.7) | 0.39 cm (0.73) |
+| 3 | 15.8 cm at 5.60 m | 0.64 cm | +0.6 cm (+6.3) | 0.37 cm (0.70) |
+| 5 | 16.1 cm at 5.80 m | 0.53 cm | +0.4 cm (+5.9) | 0.37 cm (0.70) |
+
+The set-up at x = 9.98 and 10.98 m is 1.0–1.1 and 1.3–1.4 cm (lab 1.33 and
+1.38 cm; front alone 0.3 and 0.7 cm). With three and five layers the waves
+now lose height before the measured breaking point (14.5 and 12.7 cm at
+6.40 m, lab 16.2 cm).
+
+**The flume tests** (H_m0 at the gauges: rms error and mean error):
+
+![Battjes and Janssen](doc/figures/swash_bj78.png)
+
+![Boers 1B](doc/figures/swash_boers.png)
+
+| | Battjes & Janssen 13 (12 gauges) | Battjes & Janssen 15 (13 gauges) | Boers 1B (35 points) |
+|---|---|---|---|
+| SWASH as published (calibrated mixing length) | 0.83 cm, −0.54 cm | 1.28 cm, −0.32 cm | 0.96 cm, +0.41 cm |
+| NHFOAM, 1 layer, front only | 1.64 cm, +1.03 cm | 3.96 cm, +3.27 cm | 4.06 cm, +3.69 cm |
+| NHFOAM, 2 layers, Kennedy et al. (6.7) | | 3.37 cm, +2.68 cm | |
+| NHFOAM, 1 layer, whole wave + mixing length | 1.13 cm, +0.67 cm | 1.86 cm, +1.47 cm | 2.37 cm, +2.10 cm |
+| NHFOAM, 2 layers, whole wave + mixing length | 0.58 cm, +0.10 cm | 1.15 cm, +0.67 cm | 0.93 cm, +0.76 cm |
+
+- **With two layers the new set is as close to the measurements as
+  SWASH's published runs**, without a length chosen for each case: 0.6,
+  1.2 and 0.9 cm rms against 0.8, 1.3 and 1.0 cm. In run 15 SWASH's waves
+  lose 8–11% of their height before they break (its mixing length acts
+  everywhere); NHFOAM's are 0.5–2 cm high behind the bars.
+- **With one layer breaking starts too late.** In run 15 the waves keep
+  their height about 2 m further than measured, and in Boers's flume, where
+  spilling breakers were seen from the start, they lose nothing over the
+  first 16 m (H_m0 0.199 m at x = 16.5 m, measured 0.162 m; two layers
+  0.178 m). The fronts of a one-layer wave reach α = 0.6 late. The error
+  is still about half that of the front alone.
+- **The wavemaker gives 96–98% of the target height** at the first gauge
+  of Battjes & Janssen (0.143 and 0.194–0.197 m for 0.147 and 0.202 m) and
+  0.203 m for 0.206 m in Boers's flume.
+- **Periods and long waves in Boers's flume.** T_m02 over 0–2 Hz is 4–5%
+  longer than that of the measured spectra up to x = 16 m and 9–21% longer
+  from the bar on (two layers: 1.50 s against 1.26 s at station 5), and the
+  wave height below f_p/2 is 3.4–6.5 cm where the measured incoming part is
+  2.9–5.0 cm. The model's value includes the long waves that travel back,
+  and its wavemaker is linear, so it sends free long waves in place of the
+  bound ones.
+- On average 83, 97 and 156 columns are breaking (of about 620, 550 and
+  740 wet ones), against 4, 7 and 9 with the front alone.
+
+**At field scale** (the 2DV runs of tutorial 4's beach in 6.13, one layer,
+Δx = 1 m): the wave height above 0.5 f_p over the depth is 0.67, 0.73 and
+0.74 at 2, 1.5 and 1 m depth with this set, against 0.89, 0.99 and 1.07
+with the front alone.
+
+**What this does not settle.** The set is not the default: the tests of
+6.6–6.8 (undertow, longshore current) and tutorial 4 have not been rerun
+with it, the regression references of the other breaking cases stay as
+they are, and a new case (`tkw`, with its restart and parallel checks)
+guards the new one. The viscosity acts through the whole broken wave here
+but only in the breaking points of SWASH, so n_f = 1 is SWASH's number in
+a different place. The trough behind a bar is the place to watch: a wave
+that has reformed is released only at its next crest. SWASH itself was
+not run with `BREAK` on these tests, so whether the difference between
+the two models is in the rule or elsewhere is still open.
+
+**The rip-channel test of Haller et al. (2002)** was not run. At SWASH's
+resolution (5 cm, 95 000 columns, 1638 s) it would take one to two days
+on the two cores here. `digitize_zijlema2011.py` writes what a run needs:
+the measured wave heights, set-up and mean currents on the sections of
+the paper, SWASH's curves, and the bed of the basin, which the paper
+shows as a mesh plot. All faces of that mesh are in the PDF, so the
+script orders its 10 736 vertices on their lattice, inverts the projection
+of the plot from its axes box and returns the bed on 88 × 122 points
+0.15 m apart (still-water depth 0.375 m at the seaward edge, the bar with
+its two channels at y = 4.5 and 13.7 m).
+
+`make_figures.sh` has the commands of the three figures.
+
 ## 7. Limitations (this version)
 
 - **Wetting and drying** has been tested in 2DV, on triangulated strips,
@@ -2280,10 +2492,16 @@ and C is also below the measured one.
   layers, where SWASH is reported to reproduce them with 2 (6.13); fewer
   layers also break later (1.4 m with two). SWASH's persistence rule
   (`persistence crest`) takes 0.7 cm off, and keeping the columns
-  hydrostatic behind the first front 1.5 cm; the cause of the rest is
-  open. At field scale with one layer (SWASH's tutorial 4) H_s/h in the
-  inner surf zone is 0.9–1.1, about twice the saturated value. The
-  kinematic onset
+  hydrostatic behind the first front 1.5 cm. With the whole broken wave
+  hydrostatic and a mixing length of the depth in it (`persistence wave`,
+  `viscosity depth`; 6.14) the error is 0.4–0.9 cm there and 0.6–1.2 cm
+  rms for irregular waves over two barred beaches with two layers, but
+  this set is not the default: the undertow and the longshore current
+  (6.7, 6.8) have not been rerun with it, with one layer breaking starts
+  about 2 m late, and with three or more layers a little early. At field
+  scale with one layer (SWASH's tutorial 4) H_s/h in the inner surf zone
+  is 0.9–1.1 with the front alone, about twice the saturated value, and
+  0.7 with the new set in 2DV. The kinematic onset
   with B_k ≈ 0.7–0.8 is promising but tested on the two 2DV beaches only;
   its crest-speed estimate does not look across processor boundaries.
 - **Turbulence closure.** `kOmegaLF` gives the undertow its measured
@@ -2348,15 +2566,19 @@ around it, with the adaptive time step (6.12). Then the tutorials of SWASH
 and its laboratory cases with one and two layers (6.13), with two options
 that came out of them: SWASH's persistence rule for breaking columns
 (`persistence crest`) and a wavemaker that integrates the velocity profile
-over each layer (`layerAverage`).
+over each layer (`layerAverage`). Then the flume tests of irregular
+breaking waves that SWASH's paper uses, with their measurements read from
+its figures, and from them a breaking set for one and two layers: the
+whole broken wave hydrostatic (`persistence wave`) with the mixing length
+of SWASH's `BREAK` command (`viscosity depth`) (6.14).
 
 Next:
 
-1. Breaking: the dissipation of the hydrostatic bore (6.13) and the
-   transition just after the breaking point; the kinematic
-   onset (B_k ≈ 0.7–0.8) on more beaches and on the longshore current, also
-   on Ma et al.'s grid. `persistence crest` as the default once the
-   breaking tests have been rerun with it.
+1. Breaking: the set of 6.14 on the undertow and the longshore current
+   (6.7, 6.8) and on tutorial 4, then as the default; its onset with one
+   layer; the kinematic onset (B_k ≈ 0.7–0.8) on more beaches, also on
+   Ma et al.'s grid; the rip channels of Haller et al. (2002), whose data
+   and bed are digitized, on a larger machine.
 2. Second-order wave generation; a directional-spreading test in a basin;
    `layerAverage` as the default, also in the wave zones, with new
    references for the regression suite; the loss of irregular waves on
@@ -2380,6 +2602,15 @@ Next:
 - Zijlema, M., Stelling, G.S. (2005). Further experiences with computing
   non-hydrostatic free-surface flows involving water waves. *IJNMF* 48,
   169–197.
+- Battjes, J.A., Janssen, J.P.F.M. (1978). Energy loss and set-up due to
+  breaking of random waves. *Proc. 16th Int. Conf. Coastal Eng.*, ASCE,
+  569–587.
+- Boers, M. (1996). *Simulation of a surf zone with a barred beach. Report
+  1: wave heights and wave breaking.* Communications on Hydraulic and
+  Geotechnical Engineering 96-5, Delft University of Technology.
+- Haller, M.C., Dalrymple, R.A., Svendsen, I.A. (2002). Experimental study
+  of nearshore dynamics on a barred beach with rip channels. *J. Geophys.
+  Res.* 107(C6), 3061.
 - Zijlema, M., Stelling, G., Smit, P. (2011). SWASH: an operational public
   domain code for simulating wave fields and rapidly varied flows in coastal
   waters. *Coastal Engineering* 58, 992–1012.

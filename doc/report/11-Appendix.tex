@@ -99,7 +99,10 @@ breaking
     model       hybrid;       // HFA | eddyViscosity | hybrid | none
     onset       etaT;         // etaT | kinematic (u_s.n > Bkin C)
     alpha       0.6;  beta 0.3;  Bkin 0.85;  crestSlope 0.01;
-    persistence threshold;    // or crest (until the crest has passed)
+    persistence threshold;    // or crest (until the crest has passed),
+                              // or wave (through the whole wave)
+    viscosity   kennedy;      // or depth: nu_b = nufac D^2 |S_h|
+    nufac 1;  explicitLimit no;  riseFraction 0.5;
     betaFinal   0.15; Tstar 5;   // threshold falling with the breaking age
     delta       1.2;  verticalMixing 0;     // eddy viscosity; fraction of
                                             // nu_b on the layer faces
