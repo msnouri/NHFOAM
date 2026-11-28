@@ -55,6 +55,12 @@ Description
     {
         type             nhWaveVelocity;
         activeAbsorption yes;       // optional (default yes)
+        layerAverage     no;        // optional: the target velocity is the
+                                    // average of the wave's profile over
+                                    // each face (yes) or its value at the
+                                    // face centre (no, the default); with
+                                    // one or two layers only the average
+                                    // gives the flux of the wave
         absorptionCelerity shallow; // shallow | wave | <value> [m/s]
         stillWaterLevel  0;         // optional (default: NHFOAMProperties)
         eta              eta;       // optional: name of the eta field
@@ -133,6 +139,10 @@ class nhWaveVelocityFvPatchVectorField
 
         //- Name of the surface elevation field
         word etaName_;
+
+        //- Target velocity averaged over each face instead of the value
+        //  at its centre
+        bool layerAverage_;
 
         //- Target wave, constructed on first use
         mutable autoPtr<regularWave> wavePtr_;

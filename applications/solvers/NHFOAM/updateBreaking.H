@@ -6,8 +6,10 @@
 //                   crest speed and n the direction of propagation, both
 //                   from the front faces around the column (C = d(eta)/dt
 //                   over |grad(eta)|), or C = sqrt(g D) if there are none
-//   persistence     d(eta)/dt > eta_t*, for columns that were breaking;
-//                   a column next to a breaking column joins above
+//   persistence     for columns that were breaking: d(eta)/dt > eta_t*
+//                   (persistence threshold), or d(eta)/dt > 0, i.e. until
+//                   the crest has passed (persistence crest; SWASH); a
+//                   column next to a breaking column joins above
 //                   beta sqrt(g D)
 //                     eta_t* = beta sqrt(g D)                   (default)
 //                     eta_t* = [beta + (betaFinal - beta) min(age/T*, 1)]
@@ -148,7 +150,11 @@
             {
                 const scalar a = age0[coli] + dt0;
 
-                if (onset[coli] || etaT[coli] > threshold(coli, a))
+                if
+                (
+                    onset[coli]
+                 || etaT[coli] > (brkToCrest ? scalar(0) : threshold(coli, a))
+                )
                 {
                     colBreaking[coli] = true;
                     colAge[coli] = a;

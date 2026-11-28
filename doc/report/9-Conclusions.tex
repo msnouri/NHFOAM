@@ -135,11 +135,22 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         breakers of Ting and Kirby stay 6--7 cm too high in the surf zone
         with 2 to 10 layers and break up to 1.4 m late with two, where
         SWASH is reported to reproduce them with two layers: the
-        hydrostatic bore dissipates too little in \NHFOAM. On SWASH's
-        tutorial beach, irregular waves of $kd = 1.7$ lose 10\% of their
-        height over eight peak wavelengths with two layers and 6\% with
-        five, on any grid; with $kd = 0.68$ and one layer they follow
-        linear shoaling within 2--3\%.
+        hydrostatic bore dissipates too little in \NHFOAM. SWASH's source
+        keeps a breaking point hydrostatic until the crest has passed;
+        with that rule, now an option, the error falls by a tenth. On
+        SWASH's tutorial beach, irregular waves of $kd = 1.7$ lose 10\% of
+        their height over eight peak wavelengths with two layers and 6\%
+        with five, on any grid; with $kd = 0.68$ and one layer they follow
+        linear shoaling within 2--3\%, and within 1\% when the wavemaker
+        integrates the velocity profile over the layer instead of taking
+        it at mid-depth. In its tutorial with short-crested waves at an
+        angle, the undertow seaward of the surf zone is the return of the
+        wave mass flux within 6\% and the longshore current reaches
+        0.43 m/s, uniform alongshore, but the waves in the surf zone are
+        about twice as high for their depth as on measured beaches. One
+        layer without friction reproduces the three cases of the conical
+        island as three layers with friction do, except for a crest
+        behind the island that is 5--9\% higher.
   \item \textbf{Long runs.} The drift of the phase over the submerged bar
         (0.21 s in 20 s) came from the missing return current of the
         wave-making zone. With the return current, now the default, or the
@@ -178,7 +189,10 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         the surf zone is close to the measured one, but just after the
         breaking point the models lose too little height (3.5--4 cm too
         much at $x = 8$ m on the beach of \citet{ting1994}), and no
-        parameter of the model removes this. The kinematic onset with
+        parameter of the model removes this. With the HFA alone the
+        surf-zone waves are too high with any number of layers, and at
+        field scale with one layer $H_s/h$ is 0.9--1.1 in the inner surf
+        zone (Section~\ref{sec:swash}). The kinematic onset with
         $B_k \approx 0.7$--0.8 is promising but has been tested on the two
         2DV beaches only. The crest-speed estimate does not look across
         processor boundaries.
@@ -192,7 +206,10 @@ on the same set-ups, from the simplest upwards, and they changed the code:
         ($H/h \approx 0.6$--0.7) the boundary column falls behind the
         crest and the absorption makes up the volume. The absorbing boundary
         is uniform over the depth, so waves with $kh > 1.5$ are reflected
-        by 9--13\%. Directional spreading has not been tested in a basin.
+        by 9--13\%. The wavemaker takes the velocity at the face centres
+        unless \code{layerAverage} is set, which costs 2--5\% of the wave
+        height with one or two layers. Short-crested waves have been run
+        in SWASH's tutorial only, where nothing measures them.
         Irregular waves lose 3--5\% of $H_{m0}$ over 12 m in the peak band,
         for a reason not yet identified.
   \item \textbf{Landslide trailing waves} are 1.5--3 times the measured ones
@@ -204,11 +221,13 @@ on the same set-ups, from the simplest upwards, and they changed the code:
 
 \paragraph{Plans.} In order of priority:
 \begin{enumerate}[nosep]
-  \item breaking: the transition just after the breaking point; the
+  \item breaking: the dissipation of the hydrostatic bore and the
+        transition just after the breaking point; the
         kinematic onset ($B_k \approx 0.7$--0.8) on more beaches and on the
         longshore current, also on the grid of \citet{ma2012};
-  \item second-order wave generation, and a directional-spreading test in
-        a basin;
+  \item second-order wave generation, a directional-spreading test in
+        a basin, the layer-averaged wavemaker as the default, and the
+        loss of irregular waves on the way;
   \item the trailing waves of the landslide (slide motion, dissipation);
   \item a build and the regression suite with a current OpenFOAM release;
   \item depth-integrated granular slides for landslide tsunamis;

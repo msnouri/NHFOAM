@@ -389,6 +389,11 @@ const scalar volume0 =
 //         crestSlope  0.01;   //   speed C from the front faces steeper
 //                             //   than crestSlope (updateBreaking.H)
 //         beta        0.3;    // persistence: d(eta)/dt > beta sqrt(g D)
+//         persistence threshold;  // threshold: a breaking column stops
+//                             //   below beta sqrt(g D); crest: it stops
+//                             //   when the surface no longer rises (the
+//                             //   crest has passed), and beta only lets
+//                             //   neighbours join
 //         betaFinal   0.15;   // optional: persistence threshold falling
 //         Tstar       5;      //   from beta to betaFinal over the breaking
 //                             //   age T* = Tstar sqrt(D/g)
@@ -458,6 +463,19 @@ const scalar brkCrestSlope
     breakingDict.getOrDefault<scalar>("crestSlope", 0.01)
 );
 const scalar hfaBeta(breakingDict.getOrDefault<scalar>("beta", 0.3));
+const word brkPersistence
+(
+    breakingDict.getOrDefault<word>("persistence", "threshold")
+);
+
+if (brkPersistence != "threshold" && brkPersistence != "crest")
+{
+    FatalIOErrorInFunction(nhProperties)
+        << "Unknown breaking persistence " << brkPersistence
+        << ". Valid: threshold crest" << exit(FatalIOError);
+}
+
+const bool brkToCrest(brkPersistence == "crest");
 const bool brkAgeing(breakingDict.found("betaFinal"));
 const scalar brkBetaFinal
 (
@@ -512,6 +530,10 @@ if (breakingOn)
     else
     {
         Info<< hfaBeta << " sqrt(g D)";
+    }
+    if (brkToCrest)
+    {
+        Info<< " to join, breaking columns until the crest has passed";
     }
     if (breakingVisc)
     {

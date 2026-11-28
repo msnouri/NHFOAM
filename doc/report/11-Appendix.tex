@@ -99,6 +99,7 @@ breaking
     model       hybrid;       // HFA | eddyViscosity | hybrid | none
     onset       etaT;         // etaT | kinematic (u_s.n > Bkin C)
     alpha       0.6;  beta 0.3;  Bkin 0.85;  crestSlope 0.01;
+    persistence threshold;    // or crest (until the crest has passed)
     betaFinal   0.15; Tstar 5;   // threshold falling with the breaking age
     delta       1.2;  verticalMixing 0;     // eddy viscosity; fraction of
                                             // nu_b on the layer faces
@@ -135,6 +136,7 @@ inlet                         // 0/U
     type               nhWaveVelocity;
     activeAbsorption   yes;
     absorptionCelerity shallow;   // shallow | wave | value [m/s]
+    layerAverage       no;        // yes: profile averaged over each face
     wave { theory linear; waveHeight 0.041; wavePeriod 1.01; depth 0.4;
            direction (1 0 0); rampTime 2.02; }
     value              uniform (0 0 0);

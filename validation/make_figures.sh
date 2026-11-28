@@ -31,7 +31,8 @@
 #   MV   : the Monai valley (monai_valley.py <dir>: nf_14, nf_28, nw_28)
 #          and its refined meshes (monai_refined.py <dir>: nr_07, nr_035)
 #   SW   : the cases of SWASH (swash_tutorials.py <dir>: nf_t1, nf_t3,
-#          nf_t3_L5; wetdry.tingkirby with nz = 2, 3, 5: tk_L2, tk_L3, tk_L5)
+#          nf_t3_L5, nf_t4; wetdry.tingkirby with nz = 2, 3, 5: tk_L2,
+#          tk_L3, tk_L5)
 set -e
 cd "$(dirname "$0")"
 RUNS_IF=${RUNS_IF:-/home/claude/runs_if}
@@ -218,5 +219,6 @@ python3 plot_monai_refined.py $OUT/monai_valley_refined $MV/nr_07 \
 python3 plot_swash_tutorials.py $OUT/swash_tutorials.png \
     $SW/nf_t1:'tutorials 1--2: $T_p = 10$ s, 1 layer' \
     $SW/nf_t3:'tutorial 3: $T_p = 5$ s, 2 layers' $SW/nf_t3_L5:'tutorial 3 with 5 layers'
+python3 plot_swash_oblique.py $OUT/swash_oblique.png $SW/nf_t4
 python3 plot_tingkirby.py $TK94 $OUT/swash_tk_layers.png $SW/tk_L2:"NHFOAM, HFA, 2 layers" \
     $SW/tk_L3:"3 layers" $SW/tk_L5:"5 layers" $BRK/tk_hfa3:"10 layers"

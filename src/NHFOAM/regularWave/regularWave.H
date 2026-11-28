@@ -320,6 +320,17 @@ public:
 
         //- Velocity at position x (z of x is used for the vertical profile)
         vector velocity(const point& x, const scalar t) const;
+
+        //- Velocity at the horizontal position of x, averaged over the
+        //  levels zLow..zHigh (the profile of each component integrated
+        //  exactly, so that the flux through a layer is that of the wave)
+        vector velocity
+        (
+            const point& x,
+            const scalar t,
+            const scalar zLow,
+            const scalar zHigh
+        ) const;
 };
 
 

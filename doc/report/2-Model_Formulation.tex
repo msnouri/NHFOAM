@@ -127,6 +127,11 @@ The boundary condition \code{nhWaveVelocity} makes the waves at a side patch
 instead: it imposes the target velocity at the face centres, which follow
 the free surface, so that the face fluxes drive the surface of the boundary
 columns like a wave paddle whose motion is the velocity profile of the wave.
+The value at the face centre is the midpoint rule for the flux through a
+layer, which is exact to a fraction of a percent with ten layers but gives
+one layer 4\% less flux than the wave has at $kh = 1$; with
+\code{layerAverage yes} the profile of each component is integrated over
+the face (Section~\ref{sec:swash}).
 Waves that reach the patch from the inside are let out by active absorption
 \citep{schaffer2000}, as in the wave boundary conditions of OpenFOAM's
 volume-of-fluid models \citep{higuera2013},
@@ -216,6 +221,11 @@ keeps breaking, and a neighbouring column joins it, while
 \qquad T^* = T_s\sqrt{D/g}.
 \label{eq:persist}
 \end{equation}
+This is the default, \code{persistence threshold}. With
+\code{persistence crest} a breaking column keeps breaking until its surface
+stops rising ($\partial\eta/\partial t > 0$), that is, until the crest has
+passed, and \eqref{eq:persist} only decides whether a neighbour joins; this
+is the rule in SWASH's source.
 Without $\beta_F$ the threshold is the constant $\beta\sqrt{gD}$ of
 \citet{smit2013} ($\alpha = 0.6$, $\beta = 0.3$). With $\beta_F$ it falls with
 the age $t-t_0$ of the breaking event, as in the eddy-viscosity model of

@@ -652,4 +652,85 @@ Foam::vector Foam::regularWave::velocity(const point& x, const scalar t) const
 }
 
 
+Foam::vector Foam::regularWave::velocity
+(
+    const point& x,
+    const scalar t,
+    const scalar zLow,
+    const scalar zHigh
+) const
+{
+    // Heights above the bottom, limited to the water column
+    const scalar z1 = max(zLow - swl_ + h_, 0);
+    const scalar z2 = max(zHigh - swl_ + h_, z1);
+    const scalar dz = z2 - z1;
+
+    // The record of a time series is uniform over the depth (and its
+    // vertical velocity linear): the value at mid-height is the average
+    if (timeSeries_ || dz < SMALL*max(h_, scalar(1)))
+    {
+        return velocity(point(x.x(), x.y(), 0.5*(zLow + zHigh)), t);
+    }
+
+    const scalar r = ramp(t);
+
+    if (streamFunction_)
+    {
+        const scalar th = theta(x, t);
+
+        scalar u = uMean_, w = 0;
+
+        forAll(B_, i)
+        {
+            const label j = i + 1;
+            const scalar jk = j*k_;
+            const scalar ch = Foam::cosh(jk*h_);
+
+            u +=
+                B_[i]*(Foam::sinh(jk*z2) - Foam::sinh(jk*z1))/(dz*ch)
+               *Foam::cos(j*th);
+            w +=
+                B_[i]*(Foam::cosh(jk*z2) - Foam::cosh(jk*z1))/(dz*ch)
+               *Foam::sin(j*th);
+        }
+
+        return r*(u*direction_ + vector(0, 0, w));
+    }
+
+    const vector dx(x - origin_);
+
+    vector uh(Zero);
+    scalar w = 0;
+
+    forAll(amp_, i)
+    {
+        const scalar k = ks_[i];
+        const scalar th = k*(dx & dirs_[i]) - omegas_[i]*t + phases_[i];
+        const scalar aw = amp_[i]*omegas_[i]/(1 - Foam::exp(-2*k*h_));
+
+        // Averages of exp(k (zb - h)) and exp(-k (zb + h)) over z1..z2
+        scalar ep, em;
+
+        if (k*dz > 1e-4)
+        {
+            ep =
+                (Foam::exp(k*(z2 - h_)) - Foam::exp(k*(z1 - h_)))/(k*dz);
+            em =
+                (Foam::exp(-k*(z1 + h_)) - Foam::exp(-k*(z2 + h_)))/(k*dz);
+        }
+        else
+        {
+            const scalar zm = 0.5*(z1 + z2);
+            ep = Foam::exp(k*(zm - h_));
+            em = Foam::exp(-k*(zm + h_));
+        }
+
+        uh += aw*(ep + em)*Foam::cos(th)*dirs_[i];
+        w += aw*(ep - em)*Foam::sin(th);
+    }
+
+    return r*(uh + vector(0, 0, w)) + sqr(r)*uReturn_;
+}
+
+
 // ************************************************************************* //

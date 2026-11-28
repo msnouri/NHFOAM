@@ -37,6 +37,7 @@ Foam::nhWaveVelocityFvPatchVectorField::nhWaveVelocityFvPatchVectorField
     swlGiven_(false),
     swl_(0),
     etaName_("eta"),
+    layerAverage_(false),
     wavePtr_(nullptr),
     gMag_(0)
 {}
@@ -57,6 +58,7 @@ Foam::nhWaveVelocityFvPatchVectorField::nhWaveVelocityFvPatchVectorField
     swlGiven_(dict.found("stillWaterLevel")),
     swl_(dict.getOrDefault<scalar>("stillWaterLevel", 0)),
     etaName_(dict.getOrDefault<word>("eta", "eta")),
+    layerAverage_(dict.getOrDefault<bool>("layerAverage", false)),
     wavePtr_(nullptr),
     gMag_(0)
 {
@@ -118,6 +120,7 @@ Foam::nhWaveVelocityFvPatchVectorField::nhWaveVelocityFvPatchVectorField
     swlGiven_(ptf.swlGiven_),
     swl_(ptf.swl_),
     etaName_(ptf.etaName_),
+    layerAverage_(ptf.layerAverage_),
     wavePtr_(nullptr),
     gMag_(0)
 {}
@@ -136,6 +139,7 @@ Foam::nhWaveVelocityFvPatchVectorField::nhWaveVelocityFvPatchVectorField
     swlGiven_(ptf.swlGiven_),
     swl_(ptf.swl_),
     etaName_(ptf.etaName_),
+    layerAverage_(ptf.layerAverage_),
     wavePtr_(nullptr),
     gMag_(0)
 {}
@@ -155,6 +159,7 @@ Foam::nhWaveVelocityFvPatchVectorField::nhWaveVelocityFvPatchVectorField
     swlGiven_(ptf.swlGiven_),
     swl_(ptf.swl_),
     etaName_(ptf.etaName_),
+    layerAverage_(ptf.layerAverage_),
     wavePtr_(nullptr),
     gMag_(0)
 {}
@@ -199,9 +204,34 @@ void Foam::nhWaveVelocityFvPatchVectorField::updateCoeffs()
     const vectorField& Cf = patch().Cf();
 
     vectorField Up(Cf.size());
-    forAll(Cf, i)
+
+    if (layerAverage_)
     {
-        Up[i] = w.velocity(Cf[i], t);
+        // Average of the wave's velocity profile over the height of each
+        // face (lowest to highest point), at the face centre in plan
+        const polyPatch& pp = patch().patch();
+        const pointField& pts = pp.localPoints();
+        const faceList& fcs = pp.localFaces();
+
+        forAll(Cf, i)
+        {
+            scalar zLow = GREAT, zHigh = -GREAT;
+
+            for (const label pi : fcs[i])
+            {
+                zLow = min(zLow, pts[pi].z());
+                zHigh = max(zHigh, pts[pi].z());
+            }
+
+            Up[i] = w.velocity(Cf[i], t, zLow, zHigh);
+        }
+    }
+    else
+    {
+        forAll(Cf, i)
+        {
+            Up[i] = w.velocity(Cf[i], t);
+        }
     }
 
     if (activeAbsorption_ && db().foundObject<volScalarField>(etaName_))
@@ -246,6 +276,10 @@ void Foam::nhWaveVelocityFvPatchVectorField::write(Ostream& os) const
 {
     fvPatchVectorField::write(os);
     os.writeEntry("activeAbsorption", activeAbsorption_);
+    if (layerAverage_)
+    {
+        os.writeEntry("layerAverage", layerAverage_);
+    }
     if (absorptionMode_ == "value")
     {
         os.writeEntry("absorptionCelerity", absorptionCelerity_);

@@ -596,10 +596,14 @@ if __name__ == "__main__":
     print(standing_case(case, kh, nl))
 
 
-def wave_bc(patch, wave, absorb=True, celerity=None):
+def wave_bc(patch, wave, absorb=True, celerity=None, layerAverage=False):
     """U entry of a boundary wavemaker (nhWaveVelocity) with the given entries
-    of the target wave (see regularWave.H)."""
+    of the target wave (see regularWave.H).  layerAverage: the target is the
+    average of the wave's velocity profile over each face instead of its
+    value at the face centre (for one or two layers)."""
     cel = f"        absorptionCelerity {celerity};\n" if celerity else ""
+    if layerAverage:
+        cel += "        layerAverage    yes;\n"
     body = "\n".join("            " + l.strip() for l in wave.strip().splitlines() if l.strip())
     return f"""    {patch}
     {{
